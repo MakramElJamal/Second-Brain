@@ -1,0 +1,42 @@
+[project]
+name = "second-brain-web-mcp"
+version = "0.2.0"
+description = "Secure remote MCP server for an Obsidian/markdown second brain, with token-light search. Built on obsidian-web-mcp (MIT)."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=1.9.0",
+    "python-frontmatter>=1.1.0",
+    "ruamel.yaml>=0.18",
+    "pydantic>=2.0",
+    "watchdog>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "tiktoken>=0.7",
+]
+# Real tokenizer for the Pillar 4 token benchmark. Optional: the benchmark
+# degrades to a char heuristic if tiktoken is absent.
+bench = [
+    "tiktoken>=0.7",
+]
+
+[project.scripts]
+# Our deployment: upstream hardened server + token-light search_notes/get_note.
+second-brain-mcp = "second_brain_ext.entry:main"
+# Stock upstream server (no extension), kept available for comparison/debugging.
+vault-mcp = "obsidian_vault_mcp.server:main"
+# Pillar 4: token benchmark over a sample vault (measure before optimizing).
+second-brain-bench = "second_brain_ext.benchmark:main"
+# Roadmap 3: search-accuracy eval (did search return the right note?).
+second-brain-eval = "second_brain_ext.eval_search:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/obsidian_vault_mcp", "src/second_brain_ext"]
