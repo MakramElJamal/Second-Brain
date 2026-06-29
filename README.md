@@ -56,7 +56,30 @@ tokens and steer the model to safe, house-style operations (reversible — see
 
 ---
 
-## Setup
+## Easiest setup — the click-through app (no terminal needed)
+
+If you've never used a command line, do this:
+
+1. **Install Python** once: [python.org/downloads](https://www.python.org/downloads/)
+   → run the installer and **tick "Add python.exe to PATH"**.
+2. **Download this project:** on the GitHub page, click the green **Code** button →
+   **Download ZIP**, then unzip it somewhere (e.g. your Desktop).
+3. **Double-click `Second-Brain.cmd`** in the unzipped folder. A small window opens
+   with buttons:
+   - **1. Set up** — pick your notes folder; it installs everything and shows your
+     login password (keep it).
+   - **2. Choose how to connect** — Local, or a free web link (Tailscale recommended).
+   - **3. Start the server**, **4. Stop the server**, and **Uninstall** — all buttons.
+4. **Connect Claude:** Settings → Connectors → Add custom connector → paste the
+   URL the app gives you → sign in with username `obsidian` and the password from
+   step 1.
+
+That's it. The same window turns the server off and uninstalls when you're done.
+The manual/PowerShell steps below do exactly the same thing if you prefer them.
+
+---
+
+## Setup (manual / PowerShell)
 
 > The commands below are **PowerShell on Windows** (the primary supported
 > platform). macOS/Linux work too — use a `python3 -m venv` + the equivalents, and
@@ -135,6 +158,16 @@ a secret is missing. Check it's alive: open `http://127.0.0.1:8531/health` →
 
 Done. Ask *"what do my notes say about …"* and the assistant will search your
 vault.
+
+### Manage / stop / uninstall
+
+```powershell
+.\scripts\manage.ps1      # text menu: set up / connect / start / stop / uninstall
+.\scripts\stop.ps1        # turn the server off (and an attached Cloudflare tunnel)
+.\scripts\uninstall.ps1   # remove the install (your vault is never touched)
+```
+
+(Or just use the buttons in the `Second-Brain.cmd` window.)
 
 ---
 
