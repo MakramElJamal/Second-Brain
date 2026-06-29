@@ -53,7 +53,7 @@ files never leave your machine; the model receives only the slices it requests.
 
 ## Setup scripts and the click-through app
 
-The helpers (`scripts/*.ps1`, `Second-Brain.cmd`, the `gui.ps1` window) are
+The helpers (`scripts/*.ps1`, `Install Second Brain.cmd`, the `gui.ps1` window) are
 convenience wrappers around the same install steps — they are **not** a privilege
 boundary, and they were reviewed for the obvious risks:
 
@@ -68,7 +68,7 @@ boundary, and they were reviewed for the obvious risks:
 - **`.env` is locked down.** `setup.ps1` restricts `.env` to your user (NTFS ACL).
 
 Operator notes / residual considerations:
-- **Unsigned scripts + execution-policy bypass.** `Second-Brain.cmd` launches
+- **Unsigned scripts + execution-policy bypass.** `Install Second Brain.cmd` launches
   PowerShell with `-ExecutionPolicy Bypass` so the tool runs on a default Windows
   install. The bypass is per-launch and local to these scripts; it does not change
   your system policy. As with any downloaded tool you are trusting this code —

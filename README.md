@@ -56,26 +56,33 @@ tokens and steer the model to safe, house-style operations (reversible — see
 
 ---
 
-## Easiest setup — the click-through app (no terminal needed)
+## Install — for everyone (no coding, ~5 minutes)
 
-If you've never used a command line, do this:
+**You only need a Windows PC. The app installs everything else for you** — you
+never open a terminal or type a command.
 
-1. **Install Python** once: [python.org/downloads](https://www.python.org/downloads/)
-   → run the installer and **tick "Add python.exe to PATH"**.
-2. **Download this project:** on the GitHub page, click the green **Code** button →
-   **Download ZIP**, then unzip it somewhere (e.g. your Desktop).
-3. **Double-click `Second-Brain.cmd`** in the unzipped folder. A small window opens
-   with buttons:
-   - **1. Set up** — pick your notes folder; it installs everything and shows your
-     login password (keep it).
-   - **2. Choose how to connect** — Local, or a free web link (Tailscale recommended).
-   - **3. Start the server**, **4. Stop the server**, and **Uninstall** — all buttons.
-4. **Connect Claude:** Settings → Connectors → Add custom connector → paste the
-   URL the app gives you → sign in with username `obsidian` and the password from
-   step 1.
+1. **Download it.** At the top of this page, click the green **`< > Code`** button
+   → **Download ZIP**. Open your Downloads, **right-click the ZIP → Extract All**.
+2. **Open the folder** and **double-click `Install Second Brain`**.
+3. A window opens and walks you through it:
+   - **Step 1 — What you need:** if something is missing (like Python), click
+     **Install for me** and it installs automatically. (Close and reopen the app
+     once when it asks you to.)
+   - **Step 2 — Choose my notes folder:** pick the folder where your notes live.
+   - **Step 3 — Start.**
+   - **Step 4 — Add to Claude:** the window shows a **link** and **password** with a
+     **Copy** button.
+4. **In Claude:** Settings → Connectors → **Add custom connector**, paste the link,
+   and sign in with username `obsidian` and that password. Done.
 
-That's it. The same window turns the server off and uninstalls when you're done.
-The manual/PowerShell steps below do exactly the same thing if you prefer them.
+To turn it off or remove it later, open the same window and click **Stop** or
+**Uninstall** (your notes are never touched).
+
+> First run may show **"Windows protected your PC"** — click **More info → Run
+> anyway** (that appears only because the file was downloaded).
+
+*Developers / advanced users: the manual PowerShell setup is
+[further down](#setup-manual--powershell).*
 
 ---
 
@@ -167,7 +174,7 @@ vault.
 .\scripts\uninstall.ps1   # remove the install (your vault is never touched)
 ```
 
-(Or just use the buttons in the `Second-Brain.cmd` window.)
+(Or just use the buttons in the **Install Second Brain** window.)
 
 ---
 
