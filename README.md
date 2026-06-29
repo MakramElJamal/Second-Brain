@@ -1,15 +1,20 @@
 # Second Brain MCP
 
-Give Claude (or any MCP client) **token-light, house-style read/write access to
-your Obsidian / markdown vault** — locally, or over the web — without your notes
-ever leaving your machine.
+**Give your AI a memory of your own notes.** Second Brain MCP is a private
+*context layer* that connects your personal notes (a folder of Obsidian / markdown
+files) to Claude and other AI assistants — so the AI can look things up in *your*
+knowledge and file new notes for you, instead of starting from scratch every time.
+Everything stays **on your own computer**; your notes are never uploaded to anyone.
 
-Most "AI + notes" tools dump whole files into the model. This one is **stingy by
-design**: search returns ranked *snippets + summaries*, and a full note (or a
-single section of one) is fetched only when asked. Writes go through *your* house
-style — PARA placement, per-type templates, tag and folder governance — so every
-assistant files notes the same way. The vault stays the source of truth: plain
-markdown on disk, no lock-in.
+It's **efficient by design**: instead of stuffing whole files into the AI (slow and
+costly), it hands over the *smallest useful slice* — a ranked snippet or a single
+section — and only fetches more when asked. New notes follow *your* style (where
+things go, how they're tagged), so every assistant files them consistently. Your
+notes stay plain markdown on disk — no lock-in, nothing proprietary.
+
+*(For developers: it's a local-first, token-light **MCP server** over your vault —
+ranked snippet/section retrieval with progressive disclosure, plus a house-style
+write layer. Details below.)*
 
 Built on the hardened [`obsidian-web-mcp`](https://github.com/jimprosser/obsidian-web-mcp)
 core (MIT) — OAuth, path-safety, atomic writes — with our token-light retrieval
@@ -37,6 +42,44 @@ unmodified). See [`NOTICE.md`](NOTICE.md).
 
 ---
 
+## Install — for everyone (no coding, ~5 minutes)
+
+**You only need a Windows PC. The app installs everything else for you** — you
+never open a terminal or type a command.
+
+1. **Download it.** At the top of this page, click the green **`< > Code`** button
+   → **Download ZIP**. Open your Downloads, **right-click the ZIP → Extract All**.
+2. **Open the folder** and **double-click `Install Second Brain`**.
+3. A window opens and walks you through it:
+   - **Step 1 — What you need:** if something is missing (like Python), click
+     **Install for me** — it installs automatically and the app keeps going.
+   - **Step 2 — Choose my notes folder:** pick the folder where your notes live. A
+     progress bar shows it working (the first install takes about a minute).
+   - **Step 3 — Start.** The server runs quietly in the background (no window to
+     babysit).
+   - **Step 4 — Add to Claude:** the window shows a **link** and **password** with a
+     **Copy** button.
+4. **In Claude:** Settings → Connectors → **Add custom connector**, paste the link,
+   and sign in with username `obsidian` and that password. Done.
+
+**Want it on your phone / claude.ai too?** Click **Use from phone / web** in the
+window. It installs **Tailscale** for you (free) and gives you a stable web link;
+you just sign in to Tailscale once when the browser opens.
+
+**Always on?** Tick **"Start automatically when I turn on my PC"** in the window
+and the server starts by itself every time you log in.
+
+To turn it off or remove it later, open the same window and click **Stop** or
+**Uninstall** (your notes are never touched).
+
+> First run may show **"Windows protected your PC"** — click **More info → Run
+> anyway** (that appears only because the file was downloaded).
+
+*Developers / advanced users: the manual PowerShell setup is
+[further down](#setup-manual--powershell).*
+
+---
+
 ## What the assistant sees: 8 curated tools
 
 | Tool | Kind | What it does |
@@ -53,40 +96,6 @@ unmodified). See [`NOTICE.md`](NOTICE.md).
 The underlying core ships ~20 low-level tools; we prune to this allowlist to save
 tokens and steer the model to safe, house-style operations (reversible — see
 `ALLOWLIST` in `src/second_brain_ext/extension.py`).
-
----
-
-## Install — for everyone (no coding, ~5 minutes)
-
-**You only need a Windows PC. The app installs everything else for you** — you
-never open a terminal or type a command.
-
-1. **Download it.** At the top of this page, click the green **`< > Code`** button
-   → **Download ZIP**. Open your Downloads, **right-click the ZIP → Extract All**.
-2. **Open the folder** and **double-click `Install Second Brain`**.
-3. A window opens and walks you through it:
-   - **Step 1 — What you need:** if something is missing (like Python), click
-     **Install for me** — it installs automatically and the app keeps going.
-   - **Step 2 — Choose my notes folder:** pick the folder where your notes live.
-   - **Step 3 — Start.** The server runs quietly in the background (no window to
-     babysit).
-   - **Step 4 — Add to Claude:** the window shows a **link** and **password** with a
-     **Copy** button.
-4. **In Claude:** Settings → Connectors → **Add custom connector**, paste the link,
-   and sign in with username `obsidian` and that password. Done.
-
-**Want it on your phone / claude.ai too?** Click **Use from phone / web** in the
-window. It installs **Tailscale** for you (free) and gives you a stable web link;
-you just sign in to Tailscale once when the browser opens.
-
-To turn it off or remove it later, open the same window and click **Stop** or
-**Uninstall** (your notes are never touched).
-
-> First run may show **"Windows protected your PC"** — click **More info → Run
-> anyway** (that appears only because the file was downloaded).
-
-*Developers / advanced users: the manual PowerShell setup is
-[further down](#setup-manual--powershell).*
 
 ---
 

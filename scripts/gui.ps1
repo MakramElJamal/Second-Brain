@@ -141,6 +141,12 @@ try {
     $btnUninstall.ForeColor = [Drawing.Color]::Firebrick
     $form.Controls.Add($btnUninstall)
 
+    $chkAuto = New-Object Windows.Forms.CheckBox
+    $chkAuto.Text = "Start automatically when I turn on my PC"
+    $chkAuto.Location = New-Object Drawing.Point(22, 452); $chkAuto.Size = New-Object Drawing.Size(440, 24)
+    $form.Controls.Add($chkAuto)
+    $script:autoBusy = $false
+
     # ---------- state refresh ----------
     function Refresh-UI {
         $py = Have-Python
@@ -234,6 +240,20 @@ try {
             $r = [System.Windows.Forms.MessageBox]::Show("Remove the install? Your notes are NOT touched.", "Uninstall", "YesNo")
             if ($r -eq "Yes") { Run-Window (Join-Path $scripts "uninstall.ps1") @("-Yes") -Wait; Refresh-UI }
         })
+
+    $chkAuto.Add_CheckedChanged({
+            if ($script:autoBusy) { return }
+            try {
+                $act = if ($chkAuto.Checked) { "enable" } else { "disable" }
+                & (Join-Path $scripts "autostart.ps1") -Action $act | Out-Null
+            }
+            catch { Info("Couldn't change auto-start:`n$($_.Exception.Message)") }
+        })
+
+    # Reflect current auto-start state without firing the handler.
+    $script:autoBusy = $true
+    try { $chkAuto.Checked = ((& (Join-Path $scripts "autostart.ps1") -Action status) -eq "enabled") } catch { }
+    $script:autoBusy = $false
 
     Refresh-UI
     [void]$form.ShowDialog()

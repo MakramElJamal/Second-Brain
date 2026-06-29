@@ -24,21 +24,27 @@ if ((Test-Path $envFile) -and -not $Force) {
     throw ".env already exists at $envFile. Re-run with -Force to regenerate it (this replaces your current secrets)."
 }
 
-# 2. Find a Python interpreter.
-$py = (Get-Command python -ErrorAction SilentlyContinue) ?? (Get-Command py -ErrorAction SilentlyContinue)
+# 2. Find a Python interpreter (Windows PowerShell 5.1-safe; no null-coalescing).
+$py = Get-Command python -ErrorAction SilentlyContinue
+if (-not $py) { $py = Get-Command py -ErrorAction SilentlyContinue }
 if (-not $py) { throw "Python 3.12+ not found on PATH. Install it from https://python.org and re-run." }
 
-# 3. Create the venv + install the server (idempotent).
+# 3. Create the venv + install the server (idempotent), with a progress bar so
+#    it's obvious something is happening during the slow pip install.
+$act = "Setting up Second Brain"
+Write-Progress -Activity $act -Status "Creating environment..." -PercentComplete 10
 $venvPy = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPy)) {
-    Write-Host "Creating virtualenv (.venv) ..."
     & $py.Source -m venv (Join-Path $root ".venv")
 }
 if (-not $SkipInstall) {
-    Write-Host "Installing the server (this can take a minute) ..."
-    & $venvPy -m pip install --quiet --upgrade pip
-    & $venvPy -m pip install --quiet -e $root
+    Write-Progress -Activity $act -Status "Updating the installer..." -PercentComplete 25
+    & $venvPy -m pip install --upgrade pip
+    Write-Progress -Activity $act -Status "Installing components - this takes about a minute, please wait..." -PercentComplete 45
+    Write-Host "Installing components (about a minute). You'll see packages download below:" -ForegroundColor Cyan
+    & $venvPy -m pip install -e $root
 }
+Write-Progress -Activity $act -Status "Writing your settings..." -PercentComplete 85
 
 # 4. Ask for the vault path if not supplied, and sanity-check it.
 if (-not $VaultPath) {
@@ -77,11 +83,16 @@ try {
     Write-Warning "Could not restrict .env permissions automatically; secure it manually."
 }
 
+Write-Progress -Activity $act -Completed
+
 Write-Host ""
-Write-Host "Done. .env written to $envFile" -ForegroundColor Green
-Write-Host "Your login password (save it - you'll type it once when connecting):" -ForegroundColor Yellow
+Write-Host "==================================================" -ForegroundColor Green
+Write-Host "  SETUP COMPLETE" -ForegroundColor Green
+Write-Host "==================================================" -ForegroundColor Green
+Write-Host "  Your login (save it - you type it once in Claude):"
 Write-Host "    username: obsidian"
-Write-Host "    password: $pass"
+Write-Host "    password: $pass" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Next: start the server with   .\run.ps1"
-Write-Host "Then connect a client to      http://127.0.0.1:8531   (see README - Quickstart)."
+Write-Host "  You can CLOSE this window now and go back to the app:"
+Write-Host "  click 'Step 3 - Start'. (The password also shows there.)"
+Write-Host "=================================================="
