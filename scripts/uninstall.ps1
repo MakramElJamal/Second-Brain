@@ -5,6 +5,11 @@ param([switch]$Yes, [switch]$PurgeSecrets)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
+# Defensive: only ever operate inside the real project folder, never elsewhere.
+if (-not (Test-Path (Join-Path $root "pyproject.toml"))) {
+    throw "Refusing to run: '$root' does not look like the Second Brain MCP project folder."
+}
+
 Write-Host "This removes the Second Brain MCP install (virtualenv + build files)."
 Write-Host "Your vault and notes are NOT touched." -ForegroundColor Yellow
 if (-not $Yes) {

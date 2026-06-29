@@ -175,6 +175,7 @@ vault.
 
 | Symptom | Fix |
 |---|---|
+| *"Windows protected your PC"* on the `.cmd` | SmartScreen warning on a downloaded file — click **More info → Run anyway** (only if you got it from the official repo). |
 | `run.ps1`: *".env not found"* | Run `.\scripts\setup.ps1` first. |
 | *"VAULT_MCP_TOKEN … must be set"* | A secret is missing — `.\scripts\setup.ps1 -Force`. |
 | `connect.ps1`: *"cloudflared not found"* | `winget install Cloudflare.cloudflared`, then retry. |

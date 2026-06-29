@@ -51,6 +51,36 @@ files never leave your machine; the model receives only the slices it requests.
 - **Backups.** This tool can modify your vault. Keep your vault under version
   control or backup before enabling writes.
 
+## Setup scripts and the click-through app
+
+The helpers (`scripts/*.ps1`, `Second-Brain.cmd`, the `gui.ps1` window) are
+convenience wrappers around the same install steps — they are **not** a privilege
+boundary, and they were reviewed for the obvious risks:
+
+- **No dynamic code execution.** The scripts contain no `Invoke-Expression`,
+  download-and-run, or encoded commands; they only call fixed, in-repo scripts.
+- **No secrets on the command line.** Secrets are generated into `.env` and reach
+  the server via environment variables, never as process arguments (which are
+  visible in the OS process list). The only user inputs are the vault folder
+  (via a picker) and the connection choice — neither is a secret.
+- **No elevation.** Everything runs with your normal user rights. Only the
+  optional auto-start (`install-server-task.ps1`) needs Administrator.
+- **`.env` is locked down.** `setup.ps1` restricts `.env` to your user (NTFS ACL).
+
+Operator notes / residual considerations:
+- **Unsigned scripts + execution-policy bypass.** `Second-Brain.cmd` launches
+  PowerShell with `-ExecutionPolicy Bypass` so the tool runs on a default Windows
+  install. The bypass is per-launch and local to these scripts; it does not change
+  your system policy. As with any downloaded tool you are trusting this code —
+  **only run it from the official repository.** Windows SmartScreen may warn on a
+  freshly downloaded `.cmd`; proceed only if you trust the source.
+- **`stop.ps1`** stops whatever is listening on your configured `VAULT_MCP_PORT`
+  and any running `cloudflared` process — keep that in mind if you run
+  `cloudflared` for something unrelated.
+- **`uninstall.ps1`** removes only the install (virtualenv/build, plus `.env` /
+  `.secrets` if you confirm), refuses to run outside the project folder, and
+  **never reads or deletes your vault.**
+
 ## Deployment hardening checklist
 
 - [ ] Strong random `VAULT_MCP_TOKEN` and `VAULT_OAUTH_PASSWORD` (never committed)
