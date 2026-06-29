@@ -74,6 +74,10 @@ Operator notes / residual considerations:
   your system policy. As with any downloaded tool you are trusting this code —
   **only run it from the official repository.** Windows SmartScreen may warn on a
   freshly downloaded `.cmd`; proceed only if you trust the source.
+- **Background server + one-click installs.** The app's **Start** runs the server
+  in a hidden window (managed by the app's Start/Stop). The **Install for me**
+  buttons run `winget install` for Python (per-user, no admin) and, for web access,
+  Tailscale (which, being a VPN service, will prompt the normal Windows UAC).
 - **`stop.ps1`** stops whatever is listening on your configured `VAULT_MCP_PORT`
   and any running `cloudflared` process — keep that in mind if you run
   `cloudflared` for something unrelated.

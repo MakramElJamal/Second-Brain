@@ -82,16 +82,23 @@ switch ($Mode) {
         if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
             throw "tailscale not found. Install from https://tailscale.com/download, then run:  tailscale up"
         }
-        $dns = ((tailscale status --json | ConvertFrom-Json).Self.DNSName).TrimEnd(".")
-        if (-not $dns) { throw "Couldn't read your Tailscale name. Run 'tailscale up' first." }
+        # Make sure you're signed in (opens a browser the first time).
+        $st = & tailscale status 2>&1
+        if ($LASTEXITCODE -ne 0 -or ($st -match "Logged out")) {
+            Write-Host "Signing in to Tailscale - a browser window will open. Approve it, then come back here."
+            & tailscale up
+        }
+        $dns = ""
+        try { $dns = ((tailscale status --json | ConvertFrom-Json).Self.DNSName).TrimEnd(".") } catch { }
+        if (-not $dns) { throw "Not signed in to Tailscale yet. Run 'tailscale up', then try again." }
         $url = "https://$dns"
         Set-EnvVal "VAULT_MCP_PUBLIC_URL" $url
         Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $dns
         Write-Host ""
-        Write-Host "Your stable URL:  $url" -ForegroundColor Green
-        Write-Host ".env updated. In a SECOND terminal, start the server:  .\run.ps1"
-        Write-Host "Exposing it publicly now (keep this window open; Ctrl+C to stop) ..."
-        Write-Host "(First time only: enable Funnel for this device if Tailscale prompts you.)"
-        tailscale funnel $port
+        Write-Host "Your stable web link:  $url" -ForegroundColor Green
+        Write-Host ".env updated. Start the server from the app's Start button (or:  .\run.ps1)."
+        Write-Host "Turning the public link on now - keep this window open (Ctrl+C to stop)."
+        Write-Host "If it says Funnel is not enabled, open the link it prints to turn it on, then run this once more."
+        & tailscale funnel $port
     }
 }

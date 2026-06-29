@@ -33,10 +33,26 @@ try {
     }
     function Have-Python { [bool]((Get-Command python -ErrorAction SilentlyContinue) -or (Get-Command py -ErrorAction SilentlyContinue)) }
     function Have-Winget { [bool](Get-Command winget -ErrorAction SilentlyContinue) }
+    function Have-Tailscale { [bool](Get-Command tailscale -ErrorAction SilentlyContinue) }
     function Info($m, $t = "Second Brain") { [void][System.Windows.Forms.MessageBox]::Show($m, $t) }
     function Run-Window([string]$file, [string[]]$rest, [switch]$Wait) {
         $a = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File", "`"$file`"") + $rest
         if ($Wait) { Start-Process powershell -ArgumentList $a -Wait } else { Start-Process powershell -ArgumentList $a }
+    }
+    function Run-Hidden([string]$file, [string[]]$rest) {
+        # For the server: keep it running with no visible window (the app manages it).
+        Start-Process powershell -WindowStyle Hidden -ArgumentList (@("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", "`"$file`"") + $rest)
+    }
+    function Refresh-Path {
+        # Pick up PATH changes (e.g. after installing Python) without restarting.
+        $m = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        $u = [Environment]::GetEnvironmentVariable("Path", "User")
+        $env:Path = (@($m, $u) | Where-Object { $_ }) -join ";"
+    }
+    function Restart-App {
+        Refresh-Path
+        Start-Process (Join-Path $root "Install Second Brain.cmd")
+        $form.Close()
     }
 
     # ---------- window ----------
@@ -153,15 +169,17 @@ try {
     # ---------- actions ----------
     $btnPy.Add_Click({
             if (Have-Winget) {
-                Info("Windows will now install Python for you. A window may appear - let it finish, then CLOSE this app and open 'Install Second Brain' again.")
+                Info("Windows will now install Python for you. Let the window finish - then the app continues on its own.")
                 Start-Process winget -ArgumentList "install", "-e", "--id", "Python.Python.3.12", "--scope", "user", "--accept-source-agreements", "--accept-package-agreements" -Wait
-                Info("If Python finished installing, please close this window and open 'Install Second Brain' again.")
+                Refresh-Path
+                if (Have-Python) { Info("Python is installed. You're set - go to Step 2."); Refresh-UI }
+                else { Info("Finishing the Python setup - reopening the app for you."); Restart-App }
             }
             else {
                 Info("Your Windows can't auto-install. The download page will open - install Python (tick 'Add python.exe to PATH'), then reopen this app.")
                 Start-Process "https://www.python.org/downloads/"
+                Refresh-UI
             }
-            Refresh-UI
         })
 
     $btnSetup.Add_Click({
@@ -172,7 +190,13 @@ try {
             Run-Window (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$($dlg.SelectedPath)`"")
         })
 
-    $btnStart.Add_Click({ Run-Window (Join-Path $root "run.ps1") @(); Start-Sleep -Seconds 1; Refresh-UI })
+    $btnStart.Add_Click({
+            Run-Hidden (Join-Path $root "run.ps1") @()
+            Start-Sleep -Seconds 3
+            Refresh-UI
+            if (Test-Running) { Info("Server is ON (running quietly in the background). Now do Step 4 - copy the link into Claude.") }
+            else { Info("It didn't start. Make sure Step 2 finished, then click Start again.") }
+        })
     $btnStop.Add_Click({ Run-Window (Join-Path $scripts "stop.ps1") @("-Quiet") -Wait; Refresh-UI })
 
     $btnCopy.Add_Click({
@@ -184,9 +208,26 @@ try {
 
     $btnWeb.Add_Click({
             $choice = [System.Windows.Forms.MessageBox]::Show(
-                "Get a web link so you can use it from your phone / claude.ai?`n`nYes  = Tailscale (free account, stable link - recommended)`nNo   = keep it on this computer only",
+                "Use it from your phone / claude.ai with a free, stable web link (Tailscale)?",
                 "Web access", "YesNo")
-            if ($choice -eq "Yes") { Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale") }
+            if ($choice -ne "Yes") { return }
+            if (-not (Have-Tailscale)) {
+                if (Have-Winget) {
+                    Info("Installing Tailscale (free). Windows may ask for permission - click Yes, and let it finish.")
+                    Start-Process winget -ArgumentList "install", "-e", "--id", "tailscale.tailscale", "--accept-source-agreements", "--accept-package-agreements" -Wait
+                    Refresh-Path
+                }
+                else {
+                    Info("Please install Tailscale from the page that opens, then click this button again.")
+                    Start-Process "https://tailscale.com/download"; return
+                }
+            }
+            if (-not (Have-Tailscale)) {
+                Info("Tailscale isn't ready yet. Open 'Tailscale' from the Start menu and sign in, then click this again.")
+                return
+            }
+            Info("A window opens next. Sign in to Tailscale if asked - it then creates your web link and shows it. If it says Funnel is off, click the link it prints to turn it on, then run this once more.")
+            Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale")
         })
 
     $btnUninstall.Add_Click({

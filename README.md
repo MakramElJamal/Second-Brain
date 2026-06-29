@@ -66,14 +66,18 @@ never open a terminal or type a command.
 2. **Open the folder** and **double-click `Install Second Brain`**.
 3. A window opens and walks you through it:
    - **Step 1 — What you need:** if something is missing (like Python), click
-     **Install for me** and it installs automatically. (Close and reopen the app
-     once when it asks you to.)
+     **Install for me** — it installs automatically and the app keeps going.
    - **Step 2 — Choose my notes folder:** pick the folder where your notes live.
-   - **Step 3 — Start.**
+   - **Step 3 — Start.** The server runs quietly in the background (no window to
+     babysit).
    - **Step 4 — Add to Claude:** the window shows a **link** and **password** with a
      **Copy** button.
 4. **In Claude:** Settings → Connectors → **Add custom connector**, paste the link,
    and sign in with username `obsidian` and that password. Done.
+
+**Want it on your phone / claude.ai too?** Click **Use from phone / web** in the
+window. It installs **Tailscale** for you (free) and gives you a stable web link;
+you just sign in to Tailscale once when the browser opens.
 
 To turn it off or remove it later, open the same window and click **Stop** or
 **Uninstall** (your notes are never touched).
