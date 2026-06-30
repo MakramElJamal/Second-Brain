@@ -136,6 +136,24 @@ namespace SB {
         [pscustomobject]@{ Ok = $ok; Output = $text }
     }
 
+    # Run a tailscale command that may print an auth URL; open the URL and return
+    # it + the output. The process is left running (login waits for the browser).
+    function Run-TsCapture([string]$exe, [string[]]$a, [string]$workText, [string]$urlPattern) {
+        $o = [System.IO.Path]::GetTempFileName(); $e = [System.IO.Path]::GetTempFileName()
+        $script:cp = Start-Process $exe -ArgumentList $a -PassThru -WindowStyle Hidden -RedirectStandardOutput $o -RedirectStandardError $e
+        $script:capUrl = $null
+        Show-Wait $workText {
+            if (-not $script:capUrl) {
+                $c = (Get-Content $o, $e -Raw -ErrorAction SilentlyContinue)
+                if ($c -and $c -match $urlPattern) { $script:capUrl = $matches[0]; try { Start-Process $script:capUrl } catch { } }
+            }
+            ($null -ne $script:capUrl) -or $script:cp.HasExited
+        }
+        $out = ""; try { $out = ((Get-Content $o -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $e -Raw -ErrorAction SilentlyContinue)).Trim() } catch { }
+        if ($script:cp.HasExited) { Remove-Item $o, $e -ErrorAction SilentlyContinue }
+        @{ Url = $script:capUrl; Output = $out }
+    }
+
     # ---------- UI ----------
     [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -324,13 +342,20 @@ namespace SB {
         })
 
     $btnTsLogin.Add_Click({
-            $gui = Find-TailscaleGui
-            Log "Opening the Tailscale app so you can sign in..."
-            if ($gui) { try { Start-Process $gui } catch { } } else { Log "Tailscale app not found; opening the web sign-in instead." }
-            $ts = Find-Tailscale
-            if ($ts) { try { Start-Process $ts -ArgumentList "up" -WindowStyle Hidden } catch { } }   # nudge the login flow
-            $script:loginUrl = "https://login.tailscale.com/start"; $fbLogin.Visibility = "Visible"
-            Info("Sign in to Tailscale in the Tailscale window (or the tray icon, bottom-right). If nothing opened, click the 'Click here' link. When done, click Refresh.")
+            $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
+            Log "Starting Tailscale sign-in (a browser page should open)..."
+            $r = Run-TsCapture $ts @("login") "Opening Tailscale sign-in in your browser..." "https://login\.tailscale\.com/\S+"
+            if ($r.Url) {
+                $script:loginUrl = $r.Url; $fbLogin.Visibility = "Visible"
+                Log "Opened the sign-in page. Finish signing in, then click Refresh."
+            }
+            else {
+                Log ("tailscale login: " + ((($r.Output -split "`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join "  |  "))
+                $gui = Find-TailscaleGui; if ($gui) { try { Start-Process $gui } catch { } }
+                $script:loginUrl = "https://login.tailscale.com/start"; $fbLogin.Visibility = "Visible"
+                Log "No sign-in page detected. Use the 'click here' link below, then Refresh."
+            }
+            Info("Finish signing in to Tailscale in the browser, then click Refresh.`n`nIf no page opened, use the 'Click here' link in the card.")
         })
     $hlLogin.Add_Click({ if ($script:loginUrl) { try { Start-Process $script:loginUrl } catch { } } })
 
