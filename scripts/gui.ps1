@@ -79,6 +79,39 @@ namespace SB {
     function Refresh-Path { $m = [Environment]::GetEnvironmentVariable("Path", "Machine"); $u = [Environment]::GetEnvironmentVariable("Path", "User"); $env:Path = (@($m, $u) | Where-Object { $_ }) -join ";" }
     function Info($m, $t = "Second Brain") { [void][System.Windows.MessageBox]::Show($m, $t) }
     function Confirm($m, $t = "Second Brain") { [System.Windows.MessageBox]::Show($m, $t, "YesNo") -eq "Yes" }
+    function Test-Health([string]$baseUrl) {
+        if (-not $baseUrl) { return $false }
+        try { $r = Invoke-WebRequest -Uri ($baseUrl.TrimEnd("/") + "/health") -TimeoutSec 6 -UseBasicParsing; return ($r.StatusCode -eq 200) } catch { return $false }
+    }
+    function Show-ConnectorHelp {
+        $h = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add the connector" Height="540" Width="470" WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="White" FontFamily="Segoe UI">
+  <ScrollViewer Padding="22" VerticalScrollBarVisibility="Auto"><StackPanel>
+    <TextBlock Text="Add the connector" FontSize="19" FontWeight="Bold" Foreground="#111827" Margin="0,0,0,10"/>
+    <TextBlock TextWrapping="Wrap" Foreground="#374151" Margin="0,0,0,16">Use the Link from the app to connect your Second Brain to Claude or ChatGPT.</TextBlock>
+    <TextBlock Text="Claude  (paid plan)" FontSize="14" FontWeight="Bold" Foreground="#4F46E5" Margin="0,0,0,6"/>
+    <TextBlock TextWrapping="Wrap" Foreground="#111827" Margin="0,0,0,16">1.  Settings  -&gt;  Connectors  -&gt;  Add custom connector<LineBreak/>2.  Paste the Link (use the Copy button)<LineBreak/>3.  Click Add / Connect</TextBlock>
+    <TextBlock Text="ChatGPT" FontSize="14" FontWeight="Bold" Foreground="#4F46E5" Margin="0,0,0,6"/>
+    <TextBlock TextWrapping="Wrap" Foreground="#111827" Margin="0,0,0,16">1.  Settings  -&gt;  Connectors  -&gt;  turn on Developer mode<LineBreak/>2.  Add the same Link</TextBlock>
+    <Border Background="#FEF2F2" BorderBrush="#FCA5A5" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,16"><StackPanel>
+      <TextBlock Text="Important - about the password" FontWeight="Bold" Foreground="#991B1B" Margin="0,0,0,6"/>
+      <TextBlock TextWrapping="Wrap" Foreground="#7F1D1D">Do NOT type your username or password into the Claude / ChatGPT form. After you add the Link, a separate sign-in window pops up - enter the username (obsidian) and the password THERE.</TextBlock>
+    </StackPanel></Border>
+    <TextBlock TextWrapping="Wrap" Foreground="#6B7280" FontSize="12">After adding, it can take a minute or two for the tools to appear (the web link is still warming up). If it says "no tools available", wait a moment and refresh / re-open the connector.</TextBlock>
+    <Button x:Name="btnOk" Content="Got it" HorizontalAlignment="Right" Margin="0,18,0,0"/>
+  </StackPanel></ScrollViewer>
+</Window>
+'@
+        try {
+            [xml]$hx = $h
+            $wd = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $hx))
+            try { $wd.Owner = $script:win } catch { }
+            $wd.FindName("btnOk").Add_Click({ $wd.Close() }.GetNewClosure())
+            [void]$wd.ShowDialog()
+        }
+        catch { Info("In Claude/ChatGPT, add a custom connector with the Link. When a sign-in window pops up, enter username 'obsidian' and the password there - do NOT type them into the connector form.") }
+    }
 
     # Run a CLI tool, capture combined output + exit code (short commands).
     function Run-Cli([string]$exe, [string[]]$a) {
@@ -205,7 +238,7 @@ namespace SB {
         <TextBlock Text="Second Brain" FontSize="22" FontWeight="Bold" Foreground="#111827" VerticalAlignment="Center"/>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
           <Button x:Name="btnRefresh" Content="Refresh" Style="{StaticResource Ghost}" Margin="0,0,8,0"/>
-          <Border Background="#FEE2E2" CornerRadius="12" Padding="12,5"><TextBlock x:Name="txtServerPill" Text="Server: stopped" Foreground="#991B1B" FontSize="12"/></Border>
+          <Border x:Name="pillBorder" Background="#FEE2E2" CornerRadius="12" Padding="12,5"><TextBlock x:Name="txtServerPill" Text="Server: stopped" Foreground="#991B1B" FontSize="12"/></Border>
         </StackPanel>
       </DockPanel>
 
@@ -258,6 +291,10 @@ namespace SB {
           <TextBlock Grid.Row="2" Grid.Column="1" x:Name="txtPass" Text="-" VerticalAlignment="Center" FontFamily="Consolas"/>
           <Button Grid.Row="2" Grid.Column="2" x:Name="btnCopyPass" Content="Copy" Style="{StaticResource Ghost}" Margin="6,3"/>
         </Grid>
+        <DockPanel Margin="0,12,0,0">
+          <TextBlock x:Name="txtReach" Text="Tip: Start the server, then click Test." VerticalAlignment="Center" FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"/>
+          <Button x:Name="btnTest" Content="Test connection" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+        </DockPanel>
       </StackPanel></Border>
 
       <Border Style="{StaticResource Card}"><StackPanel>
@@ -278,7 +315,11 @@ namespace SB {
     $script:win = $win
     $el = { param($n) $win.FindName($n) }
 
-    $btnRefresh = & $el "btnRefresh"; $txtServerPill = & $el "txtServerPill"
+    $btnRefresh = & $el "btnRefresh"; $txtServerPill = & $el "txtServerPill"; $pillBorder = & $el "pillBorder"
+    $txtReach = & $el "txtReach"; $btnTest = & $el "btnTest"
+    $bc = New-Object System.Windows.Media.BrushConverter
+    $brGreenBg = $bc.ConvertFromString("#DCFCE7"); $brGreenFg = $bc.ConvertFromString("#166534")
+    $brRedBg = $bc.ConvertFromString("#FEE2E2"); $brRedFg = $bc.ConvertFromString("#991B1B")
     $txtPy = & $el "txtPy"; $btnPy = & $el "btnPy"
     $txtVault = & $el "txtVault"; $btnSetup = & $el "btnSetup"
     $txtTsInst = & $el "txtTsInst"; $btnTsInst = & $el "btnTsInst"
@@ -300,7 +341,8 @@ namespace SB {
         $py = Have-Python; $conf = Test-Configured; $inst = Test-Installed; $run = Test-Running
         $pub = Get-EnvVal "VAULT_MCP_PUBLIC_URL"
 
-        $txtServerPill.Text = "Server: " + $(if ($run) { "running" } else { "stopped" })
+        if ($run) { $txtServerPill.Text = "Server: running"; $txtServerPill.Foreground = $brGreenFg; $pillBorder.Background = $brGreenBg }
+        else { $txtServerPill.Text = "Server: stopped"; $txtServerPill.Foreground = $brRedFg; $pillBorder.Background = $brRedBg }
         $txtSrv.Text = $(if ($run) { "Running" } else { "Stopped" })
         $btnStart.IsEnabled = ($conf -and $inst -and -not $run); $btnStop.IsEnabled = $run
 
@@ -382,29 +424,23 @@ namespace SB {
 
     $btnStart.Add_Click({
             Log "Starting the server..."
-            Run-Hidden (Join-Path $root "run.ps1") @(); Start-Sleep -Seconds 3; Refresh-UI
-            if (Test-Running) { Log "Server is running." } else { Log "Server did NOT start. Make sure step 2 finished."; Info("It didn't start - see the Activity log.") }
+            Run-Hidden (Join-Path $root "run.ps1") @()
+            $script:srvUrl = "http://127.0.0.1:$(Get-Port)"; $script:srvReady = $false; $script:srvDeadline = (Get-Date).AddSeconds(20)
+            Show-Wait "Starting the server..." { if (Test-Health $script:srvUrl) { $script:srvReady = $true }; $script:srvReady -or ((Get-Date) -gt $script:srvDeadline) }
+            Refresh-UI
+            if ($script:srvReady) { Log "Server is running and ready." } else { Log "Server isn't responding yet. Wait a few seconds and click Refresh, or check step 2 finished." }
         })
     $btnStop.Add_Click({ Log "Stopping the server..."; [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Stopping the server..." $null); Refresh-UI; Log "Server stopped." })
 
-    $btnConnInfo.Add_Click({
-            Info(@"
-How to add the connector:
+    $btnConnInfo.Add_Click({ Show-ConnectorHelp })
 
-CLAUDE  (claude.ai or the desktop app; paid plan)
-  1. Settings  ->  Connectors  ->  Add custom connector
-  2. Paste the Link shown below
-  3. When it opens a sign-in page, log in with:
-       username:  obsidian
-       password:  (the Password shown below)
-
-CHATGPT
-  1. Settings  ->  Connectors  ->  turn on Developer mode
-  2. Add the same Link
-     (Developer mode is required for write access)
-
-Tip: use the Copy buttons next to the Link and Password.
-"@, "Add connector")
+    $btnTest.Add_Click({
+            $pub = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; $u = if ($pub) { $pub } else { "http://127.0.0.1:$(Get-Port)" }
+            Log "Testing the connection at $u ..."
+            $script:reachUrl = $u; $script:reach = $false; $script:reachDeadline = (Get-Date).AddSeconds(8)
+            Show-Wait "Checking the connection..." { if (Test-Health $script:reachUrl) { $script:reach = $true }; $script:reach -or ((Get-Date) -gt $script:reachDeadline) }
+            if ($script:reach) { $txtReach.Text = "Reachable - ready to add the connector."; $txtReach.Foreground = $brGreenFg; Log "Connection OK - ready to add the connector." }
+            else { $txtReach.Text = "Not reachable yet. If you just turned the web link on, wait ~1-2 min (it warms up), then Test again."; $txtReach.Foreground = $brRedFg; Log "Not reachable yet." }
         })
 
     $hlUrl.Add_Click({ $u = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; if ($u) { try { Start-Process $u } catch { } } })
