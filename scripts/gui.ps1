@@ -1,7 +1,6 @@
 # Second Brain - friendly setup window. No terminal, no commands.
 # Launched by "Install Second Brain.cmd". Everything below is buttons.
-# It checks what's needed, installs anything missing with one click, then walks
-# you through Set up -> Start -> connect to Claude.
+# Flow: 1) requirements  2) set up  3) how you'll use it  4) start  5) add to Claude.
 
 try {
     Add-Type -AssemblyName System.Windows.Forms
@@ -40,11 +39,9 @@ try {
         if ($Wait) { Start-Process powershell -ArgumentList $a -Wait } else { Start-Process powershell -ArgumentList $a }
     }
     function Run-Hidden([string]$file, [string[]]$rest) {
-        # For the server: keep it running with no visible window (the app manages it).
         Start-Process powershell -WindowStyle Hidden -ArgumentList (@("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", "`"$file`"") + $rest)
     }
     function Refresh-Path {
-        # Pick up PATH changes (e.g. after installing Python) without restarting.
         $m = [Environment]::GetEnvironmentVariable("Path", "Machine")
         $u = [Environment]::GetEnvironmentVariable("Path", "User")
         $env:Path = (@($m, $u) | Where-Object { $_ }) -join ";"
@@ -58,7 +55,7 @@ try {
     # ---------- window ----------
     $form = New-Object Windows.Forms.Form
     $form.Text = "Second Brain - Setup"
-    $form.Size = New-Object Drawing.Size(500, 560)
+    $form.Size = New-Object Drawing.Size(500, 620)
     $form.StartPosition = "CenterScreen"
     $form.FormBorderStyle = "FixedDialog"; $form.MaximizeBox = $false
     $form.BackColor = [Drawing.Color]::White
@@ -66,86 +63,95 @@ try {
     $title = New-Object Windows.Forms.Label
     $title.Text = "Second Brain"
     $title.Font = New-Object Drawing.Font("Segoe UI", 16, [Drawing.FontStyle]::Bold)
-    $title.Location = New-Object Drawing.Point(20, 14); $title.AutoSize = $true
+    $title.Location = New-Object Drawing.Point(20, 12); $title.AutoSize = $true
     $form.Controls.Add($title)
 
     $sub = New-Object Windows.Forms.Label
     $sub.Text = "Connect your notes to Claude in a few clicks."
-    $sub.Location = New-Object Drawing.Point(22, 48); $sub.Size = New-Object Drawing.Size(450, 20)
+    $sub.Location = New-Object Drawing.Point(22, 44); $sub.Size = New-Object Drawing.Size(450, 20)
     $sub.ForeColor = [Drawing.Color]::DimGray
     $form.Controls.Add($sub)
 
     # ----- Step 1: requirements -----
     $g1 = New-Object Windows.Forms.GroupBox
     $g1.Text = "Step 1  -  What you need"
-    $g1.Location = New-Object Drawing.Point(20, 80); $g1.Size = New-Object Drawing.Size(450, 80)
+    $g1.Location = New-Object Drawing.Point(20, 72); $g1.Size = New-Object Drawing.Size(450, 70)
     $form.Controls.Add($g1)
-
     $lblPy = New-Object Windows.Forms.Label
     $lblPy.Location = New-Object Drawing.Point(14, 26); $lblPy.Size = New-Object Drawing.Size(280, 22)
     $g1.Controls.Add($lblPy)
-
     $btnPy = New-Object Windows.Forms.Button
     $btnPy.Text = "Install for me"
-    $btnPy.Location = New-Object Drawing.Point(300, 22); $btnPy.Size = New-Object Drawing.Size(135, 30)
+    $btnPy.Location = New-Object Drawing.Point(300, 20); $btnPy.Size = New-Object Drawing.Size(135, 30)
     $g1.Controls.Add($btnPy)
 
     # ----- Step 2: set up -----
     $btnSetup = New-Object Windows.Forms.Button
     $btnSetup.Text = "Step 2  -  Choose my notes folder and set up"
-    $btnSetup.Location = New-Object Drawing.Point(20, 172); $btnSetup.Size = New-Object Drawing.Size(450, 44)
+    $btnSetup.Location = New-Object Drawing.Point(20, 150); $btnSetup.Size = New-Object Drawing.Size(450, 42)
     $btnSetup.Font = New-Object Drawing.Font("Segoe UI", 10)
     $form.Controls.Add($btnSetup)
 
-    # ----- Step 3: start + login info -----
+    # ----- Step 3: how will you use it -----
+    $g2 = New-Object Windows.Forms.GroupBox
+    $g2.Text = "Step 3  -  How will you use it?"
+    $g2.Location = New-Object Drawing.Point(20, 200); $g2.Size = New-Object Drawing.Size(450, 112)
+    $form.Controls.Add($g2)
+    $btnWeb = New-Object Windows.Forms.Button
+    $btnWeb.Text = "From my phone and the web   (recommended)"
+    $btnWeb.Location = New-Object Drawing.Point(14, 22); $btnWeb.Size = New-Object Drawing.Size(420, 34)
+    $btnWeb.Font = New-Object Drawing.Font("Segoe UI", 10, [Drawing.FontStyle]::Bold)
+    $g2.Controls.Add($btnWeb)
+    $btnLocal = New-Object Windows.Forms.Button
+    $btnLocal.Text = "Only on this computer"
+    $btnLocal.Location = New-Object Drawing.Point(14, 60); $btnLocal.Size = New-Object Drawing.Size(420, 26)
+    $g2.Controls.Add($btnLocal)
+    $lblMode = New-Object Windows.Forms.Label
+    $lblMode.Location = New-Object Drawing.Point(16, 90); $lblMode.Size = New-Object Drawing.Size(418, 18)
+    $g2.Controls.Add($lblMode)
+
+    # ----- Step 4: start -----
     $btnStart = New-Object Windows.Forms.Button
-    $btnStart.Text = "Step 3  -  Start"
-    $btnStart.Location = New-Object Drawing.Point(20, 226); $btnStart.Size = New-Object Drawing.Size(220, 44)
+    $btnStart.Text = "Step 4  -  Start"
+    $btnStart.Location = New-Object Drawing.Point(20, 322); $btnStart.Size = New-Object Drawing.Size(220, 42)
     $btnStart.Font = New-Object Drawing.Font("Segoe UI", 10)
     $form.Controls.Add($btnStart)
-
     $btnStop = New-Object Windows.Forms.Button
     $btnStop.Text = "Stop"
-    $btnStop.Location = New-Object Drawing.Point(250, 226); $btnStop.Size = New-Object Drawing.Size(220, 44)
+    $btnStop.Location = New-Object Drawing.Point(250, 322); $btnStop.Size = New-Object Drawing.Size(220, 42)
     $form.Controls.Add($btnStop)
 
+    # ----- Step 5: add to Claude -----
     $g3 = New-Object Windows.Forms.GroupBox
-    $g3.Text = "Step 4  -  Add this to Claude"
-    $g3.Location = New-Object Drawing.Point(20, 282); $g3.Size = New-Object Drawing.Size(450, 110)
+    $g3.Text = "Step 5  -  Add this to Claude"
+    $g3.Location = New-Object Drawing.Point(20, 372); $g3.Size = New-Object Drawing.Size(450, 100)
     $form.Controls.Add($g3)
-
     $lblConn = New-Object Windows.Forms.Label
-    $lblConn.Location = New-Object Drawing.Point(14, 24); $lblConn.Size = New-Object Drawing.Size(420, 50)
+    $lblConn.Location = New-Object Drawing.Point(14, 22); $lblConn.Size = New-Object Drawing.Size(424, 46)
     $lblConn.Font = New-Object Drawing.Font("Consolas", 9)
     $g3.Controls.Add($lblConn)
-
     $btnCopy = New-Object Windows.Forms.Button
     $btnCopy.Text = "Copy link + password"
-    $btnCopy.Location = New-Object Drawing.Point(14, 74); $btnCopy.Size = New-Object Drawing.Size(200, 28)
+    $btnCopy.Location = New-Object Drawing.Point(14, 70); $btnCopy.Size = New-Object Drawing.Size(200, 26)
     $g3.Controls.Add($btnCopy)
 
-    $btnWeb = New-Object Windows.Forms.Button
-    $btnWeb.Text = "Use from phone / web (advanced)"
-    $btnWeb.Location = New-Object Drawing.Point(224, 74); $btnWeb.Size = New-Object Drawing.Size(210, 28)
-    $g3.Controls.Add($btnWeb)
-
-    # ----- status + uninstall -----
+    # ----- status, auto-start, uninstall -----
     $lblStatus = New-Object Windows.Forms.Label
-    $lblStatus.Location = New-Object Drawing.Point(22, 404); $lblStatus.Size = New-Object Drawing.Size(330, 40)
+    $lblStatus.Location = New-Object Drawing.Point(22, 480); $lblStatus.Size = New-Object Drawing.Size(300, 34)
     $lblStatus.ForeColor = [Drawing.Color]::DimGray
     $form.Controls.Add($lblStatus)
 
-    $btnUninstall = New-Object Windows.Forms.Button
-    $btnUninstall.Text = "Uninstall"
-    $btnUninstall.Location = New-Object Drawing.Point(355, 410); $btnUninstall.Size = New-Object Drawing.Size(115, 28)
-    $btnUninstall.ForeColor = [Drawing.Color]::Firebrick
-    $form.Controls.Add($btnUninstall)
-
     $chkAuto = New-Object Windows.Forms.CheckBox
     $chkAuto.Text = "Start automatically when I turn on my PC"
-    $chkAuto.Location = New-Object Drawing.Point(22, 452); $chkAuto.Size = New-Object Drawing.Size(440, 24)
+    $chkAuto.Location = New-Object Drawing.Point(22, 518); $chkAuto.Size = New-Object Drawing.Size(325, 24)
     $form.Controls.Add($chkAuto)
     $script:autoBusy = $false
+
+    $btnUninstall = New-Object Windows.Forms.Button
+    $btnUninstall.Text = "Uninstall"
+    $btnUninstall.Location = New-Object Drawing.Point(355, 514); $btnUninstall.Size = New-Object Drawing.Size(115, 28)
+    $btnUninstall.ForeColor = [Drawing.Color]::Firebrick
+    $form.Controls.Add($btnUninstall)
 
     # ---------- state refresh ----------
     function Refresh-UI {
@@ -153,17 +159,24 @@ try {
         $configured = Test-Path (Join-Path $root ".env")
         $installed = Test-Path (Join-Path $root ".venv")
         $running = Test-Running
+        $pub = Get-EnvVal "VAULT_MCP_PUBLIC_URL"
 
         if ($py) { $lblPy.Text = "Python:  installed  (OK)"; $lblPy.ForeColor = [Drawing.Color]::SeaGreen; $btnPy.Enabled = $false }
         else { $lblPy.Text = "Python:  missing"; $lblPy.ForeColor = [Drawing.Color]::Firebrick; $btnPy.Enabled = $true }
 
         $btnSetup.Enabled = $py
+        $btnWeb.Enabled = $configured
+        $btnLocal.Enabled = $configured
         $btnStart.Enabled = ($configured -and $installed -and -not $running)
         $btnStop.Enabled = $running
 
+        if (-not $configured) { $lblMode.Text = "(finish Step 2 first)"; $lblMode.ForeColor = [Drawing.Color]::Gray }
+        elseif ($pub) { $lblMode.Text = "Now: web link (Tailscale) - works on your phone and claude.ai"; $lblMode.ForeColor = [Drawing.Color]::SeaGreen }
+        else { $lblMode.Text = "Now: this computer only (pick an option above)"; $lblMode.ForeColor = [Drawing.Color]::DimGray }
+
         if ($configured) {
             $port = Get-Port; $pass = Get-EnvVal "VAULT_OAUTH_PASSWORD"
-            $url = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; if (-not $url) { $url = "http://127.0.0.1:$port" }
+            $url = $pub; if (-not $url) { $url = "http://127.0.0.1:$port" }
             $lblConn.Text = "Link:      $url`r`nUsername:  obsidian`r`nPassword:  $pass"
             $btnCopy.Enabled = $true
         }
@@ -192,15 +205,42 @@ try {
             $dlg = New-Object Windows.Forms.FolderBrowserDialog
             $dlg.Description = "Choose your notes folder (your Obsidian vault)"
             if ($dlg.ShowDialog() -ne "OK") { return }
-            Info("Setting up. A black window will open and show your PASSWORD when it finishes - keep it. This can take a minute. Then come back and click Step 3.")
+            Info("Setting up. A window opens with a progress bar - let it finish (about a minute). Then come back and choose Step 3.")
             Run-Window (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$($dlg.SelectedPath)`"")
+        })
+
+    $btnWeb.Add_Click({
+            if (-not (Have-Tailscale)) {
+                if (Have-Winget) {
+                    Info("Installing Tailscale (free) so you can reach it from anywhere. Windows may ask for permission - click Yes, and let it finish.")
+                    Start-Process winget -ArgumentList "install", "-e", "--id", "tailscale.tailscale", "--accept-source-agreements", "--accept-package-agreements" -Wait
+                    Refresh-Path
+                }
+                else {
+                    Info("Please install Tailscale from the page that opens, then click this again.")
+                    Start-Process "https://tailscale.com/download"; return
+                }
+            }
+            if (-not (Have-Tailscale)) {
+                Info("Tailscale isn't ready yet. Open 'Tailscale' from the Start menu and sign in, then click this again.")
+                return
+            }
+            Info("A window opens next. Sign in to Tailscale if asked - it then creates your web link. When you see the link, close that window, come back, and click Step 4 - Start.")
+            Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale")
+        })
+
+    $btnLocal.Add_Click({
+            try { & (Join-Path $scripts "connect.ps1") -Mode local | Out-Null }
+            catch { Info("Couldn't set local mode:`n$($_.Exception.Message)"); return }
+            Refresh-UI
+            Info("Set to: only on this computer. This works with Claude Desktop / Claude Code on THIS PC. Now click Step 4 - Start.")
         })
 
     $btnStart.Add_Click({
             Run-Hidden (Join-Path $root "run.ps1") @()
             Start-Sleep -Seconds 3
             Refresh-UI
-            if (Test-Running) { Info("Server is ON (running quietly in the background). Now do Step 4 - copy the link into Claude.") }
+            if (Test-Running) { Info("Server is ON (running quietly in the background). Now do Step 5 - copy the link into Claude.") }
             else { Info("It didn't start. Make sure Step 2 finished, then click Start again.") }
         })
     $btnStop.Add_Click({ Run-Window (Join-Path $scripts "stop.ps1") @("-Quiet") -Wait; Refresh-UI })
@@ -210,30 +250,6 @@ try {
             $url = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; if (-not $url) { $url = "http://127.0.0.1:$port" }
             [System.Windows.Forms.Clipboard]::SetText("Link: $url`r`nUsername: obsidian`r`nPassword: $pass")
             Info("Copied. In Claude: Settings -> Connectors -> Add custom connector, paste the Link, then sign in with the username and password.")
-        })
-
-    $btnWeb.Add_Click({
-            $choice = [System.Windows.Forms.MessageBox]::Show(
-                "Use it from your phone / claude.ai with a free, stable web link (Tailscale)?",
-                "Web access", "YesNo")
-            if ($choice -ne "Yes") { return }
-            if (-not (Have-Tailscale)) {
-                if (Have-Winget) {
-                    Info("Installing Tailscale (free). Windows may ask for permission - click Yes, and let it finish.")
-                    Start-Process winget -ArgumentList "install", "-e", "--id", "tailscale.tailscale", "--accept-source-agreements", "--accept-package-agreements" -Wait
-                    Refresh-Path
-                }
-                else {
-                    Info("Please install Tailscale from the page that opens, then click this button again.")
-                    Start-Process "https://tailscale.com/download"; return
-                }
-            }
-            if (-not (Have-Tailscale)) {
-                Info("Tailscale isn't ready yet. Open 'Tailscale' from the Start menu and sign in, then click this again.")
-                return
-            }
-            Info("A window opens next. Sign in to Tailscale if asked - it then creates your web link and shows it. If it says Funnel is off, click the link it prints to turn it on, then run this once more.")
-            Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale")
         })
 
     $btnUninstall.Add_Click({
@@ -250,7 +266,6 @@ try {
             catch { Info("Couldn't change auto-start:`n$($_.Exception.Message)") }
         })
 
-    # Reflect current auto-start state without firing the handler.
     $script:autoBusy = $true
     try { $chkAuto.Checked = ((& (Join-Path $scripts "autostart.ps1") -Action status) -eq "enabled") } catch { }
     $script:autoBusy = $false

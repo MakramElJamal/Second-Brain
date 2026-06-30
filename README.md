@@ -55,16 +55,19 @@ never open a terminal or type a command.
      **Install for me** — it installs automatically and the app keeps going.
    - **Step 2 — Choose my notes folder:** pick the folder where your notes live. A
      progress bar shows it working (the first install takes about a minute).
-   - **Step 3 — Start.** The server runs quietly in the background (no window to
+   - **Step 3 — How will you use it?**
+     - **From my phone & the web (recommended)** — sets up a free **Tailscale**
+       link so **Claude on your phone** and **claude.ai in a browser** can reach
+       it (they can't see an address that only exists on your PC). You sign in to
+       Tailscale once when the browser opens.
+     - **Only on this computer** — for Claude Desktop / Claude Code running on the
+       *same* PC.
+   - **Step 4 — Start.** The server runs quietly in the background (no window to
      babysit).
-   - **Step 4 — Add to Claude:** the window shows a **link** and **password** with a
+   - **Step 5 — Add to Claude:** the window shows a **link** and **password** with a
      **Copy** button.
 4. **In Claude:** Settings → Connectors → **Add custom connector**, paste the link,
    and sign in with username `obsidian` and that password. Done.
-
-**Want it on your phone / claude.ai too?** Click **Use from phone / web** in the
-window. It installs **Tailscale** for you (free) and gives you a stable web link;
-you just sign in to Tailscale once when the browser opens.
 
 **Always on?** Tick **"Start automatically when I turn on my PC"** in the window
 and the server starts by itself every time you log in.

@@ -96,9 +96,11 @@ switch ($Mode) {
         Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $dns
         Write-Host ""
         Write-Host "Your stable web link:  $url" -ForegroundColor Green
-        Write-Host ".env updated. Start the server from the app's Start button (or:  .\run.ps1)."
-        Write-Host "Turning the public link on now - keep this window open (Ctrl+C to stop)."
+        Write-Host "Turning the public link on in the background (it stays on by itself)..."
         Write-Host "If it says Funnel is not enabled, open the link it prints to turn it on, then run this once more."
-        & tailscale funnel $port
+        & tailscale funnel --bg $port
+        Write-Host ""
+        Write-Host "Done. .env updated with your web link. You can CLOSE this window." -ForegroundColor Green
+        Write-Host "Go back to the app and click Step 4 - Start.  (To turn the link off later: tailscale funnel reset)"
     }
 }
