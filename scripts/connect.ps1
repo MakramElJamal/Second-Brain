@@ -79,17 +79,23 @@ switch ($Mode) {
     }
 
     "tailscale" {
-        if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
-            throw "tailscale not found. Install from https://tailscale.com/download, then run:  tailscale up"
+        # Resolve tailscale.exe from PATH, or the real install location (PATH can
+        # be stale right after a fresh install).
+        $ts = (Get-Command tailscale -ErrorAction SilentlyContinue).Source
+        if (-not $ts) {
+            foreach ($p in @("$env:ProgramFiles\Tailscale\tailscale.exe", "${env:ProgramFiles(x86)}\Tailscale\tailscale.exe")) {
+                if ($p -and (Test-Path $p)) { $ts = $p; break }
+            }
         }
+        if (-not $ts) { throw "tailscale not found. Install from https://tailscale.com/download, then run:  tailscale up" }
         # Make sure you're signed in (opens a browser the first time).
-        $st = & tailscale status 2>&1
+        $st = & $ts status 2>&1
         if ($LASTEXITCODE -ne 0 -or ($st -match "Logged out")) {
             Write-Host "Signing in to Tailscale - a browser window will open. Approve it, then come back here."
-            & tailscale up
+            & $ts up
         }
         $dns = ""
-        try { $dns = ((tailscale status --json | ConvertFrom-Json).Self.DNSName).TrimEnd(".") } catch { }
+        try { $dns = ((& $ts status --json | ConvertFrom-Json).Self.DNSName).TrimEnd(".") } catch { }
         if (-not $dns) { throw "Not signed in to Tailscale yet. Run 'tailscale up', then try again." }
         $url = "https://$dns"
         Set-EnvVal "VAULT_MCP_PUBLIC_URL" $url
@@ -98,7 +104,7 @@ switch ($Mode) {
         Write-Host "Your stable web link:  $url" -ForegroundColor Green
         Write-Host "Turning the public link on in the background (it stays on by itself)..."
         Write-Host "If it says Funnel is not enabled, open the link it prints to turn it on, then run this once more."
-        & tailscale funnel --bg $port
+        & $ts funnel --bg $port
         Write-Host ""
         Write-Host "Done. .env updated with your web link. You can CLOSE this window." -ForegroundColor Green
         Write-Host "Go back to the app and click Step 4 - Start.  (To turn the link off later: tailscale funnel reset)"

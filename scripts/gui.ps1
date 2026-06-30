@@ -34,7 +34,15 @@ try {
     }
     function Have-Python { [bool]((Get-Command python -ErrorAction SilentlyContinue) -or (Get-Command py -ErrorAction SilentlyContinue)) }
     function Have-Winget { [bool](Get-Command winget -ErrorAction SilentlyContinue) }
-    function Have-Tailscale { [bool](Get-Command tailscale -ErrorAction SilentlyContinue) }
+    function Find-Tailscale {
+        # PATH first, then the real install location (PATH can be stale right after install).
+        $c = Get-Command tailscale -ErrorAction SilentlyContinue
+        if ($c) { return $c.Source }
+        foreach ($p in @("$env:ProgramFiles\Tailscale\tailscale.exe", "${env:ProgramFiles(x86)}\Tailscale\tailscale.exe")) {
+            if ($p -and (Test-Path $p)) { return $p }
+        }
+        return $null
+    }
     function Info($m, $t = "Second Brain") { [void][System.Windows.Forms.MessageBox]::Show($m, $t) }
     function Run-Window([string]$file, [string[]]$rest, [switch]$Wait) {
         $a = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File", "`"$file`"") + $rest
@@ -208,22 +216,24 @@ try {
         })
 
     $btnWeb.Add_Click({
-            if (-not (Have-Tailscale)) {
+            $ts = Find-Tailscale
+            if (-not $ts) {
                 if (Have-Winget) {
-                    Info("Installing Tailscale (free) so you can reach it from anywhere. Windows may ask for permission - click Yes, and let it finish.")
-                    Start-Process winget -ArgumentList "install", "-e", "--id", "tailscale.tailscale", "--accept-source-agreements", "--accept-package-agreements" -Wait
+                    Info("Installing Tailscale (free) so you can reach it from anywhere. Windows will ask for permission - click Yes, and let the window finish.")
+                    Start-Process winget -ArgumentList "install", "-e", "--id", "Tailscale.Tailscale", "--accept-source-agreements", "--accept-package-agreements" -Wait
                     Refresh-Path
+                    $ts = Find-Tailscale
                 }
-                else {
-                    Info("Please install Tailscale from the page that opens, then click this again.")
-                    Start-Process "https://tailscale.com/download"; return
+                if (-not $ts) {
+                    Info("Opening the Tailscale download page. Install it (click through the prompts), then come back and click Step 3 again.")
+                    Start-Process "https://tailscale.com/download"
+                    return
                 }
             }
-            if (-not (Have-Tailscale)) {
-                Info("Tailscale isn't ready yet. Open 'Tailscale' from the Start menu and sign in, then click this again.")
-                return
-            }
-            Info("A window opens next. Sign in to Tailscale if asked - it then creates your web link. When you see the link, close that window, come back, and click Step 4 - Start.")
+            # Make sure the window we launch next can find tailscale, even if PATH is stale.
+            $tsDir = Split-Path -Parent $ts
+            if (";$env:Path;" -notlike "*;$tsDir;*") { $env:Path = "$tsDir;$env:Path" }
+            Info("Next, a window signs you in to Tailscale (approve it in the browser) and creates your web link. When you see the link, close that window and click Step 4 - Start.")
             Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale")
         })
 
