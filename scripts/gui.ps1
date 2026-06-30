@@ -99,6 +99,20 @@ namespace SB {
         try { $f = ((& $ts funnel status 2>$null) -join "`n"); $s.FunnelOn = ($f -match "https://") } catch { }
         return $s
     }
+    function Get-TsBackend([string]$ts) { try { [string]((& $ts status --json 2>$null | ConvertFrom-Json).BackendState) } catch { "" } }
+    # Tailscale's backend sits in "NoState" until the app is opened; opening it
+    # wakes it to "Running". So: open the app, then WAIT for Running (up to 30s).
+    function Ensure-TailscaleUp([string]$ts) {
+        if ((Get-TsBackend $ts) -eq "Running") { return $true }
+        $g = Find-TailscaleGui; if ($g) { try { Start-Process $g } catch { } }
+        try { Start-Process $ts -ArgumentList "up" -WindowStyle Hidden } catch { }
+        $script:tsExe = $ts; $script:tsReady = $false; $script:tsDeadline = (Get-Date).AddSeconds(30)
+        Show-Wait "Connecting to Tailscale... this can take a few seconds." {
+            if ((Get-TsBackend $script:tsExe) -eq "Running") { $script:tsReady = $true }
+            $script:tsReady -or ((Get-Date) -gt $script:tsDeadline)
+        }
+        return ((Get-TsBackend $ts) -eq "Running")
+    }
 
     function Run-Hidden([string]$file, [string[]]$rest) {
         Start-Process powershell -WindowStyle Hidden -ArgumentList (@("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", "`"$file`"") + $rest)
@@ -211,9 +225,9 @@ namespace SB {
         <TextBlock Style="{StaticResource H}" Text="3.  Connect your Second Brain"/>
         <DockPanel Margin="0,0,0,9"><TextBlock x:Name="txtTsInst" Text="Tailscale app: ..." VerticalAlignment="Center"/>
           <Button x:Name="btnTsInst" Content="Install" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
-        <DockPanel Margin="0,0,0,3"><TextBlock x:Name="txtTsLogin" Text="Signed in: ..." VerticalAlignment="Center"/>
-          <Button x:Name="btnTsLogin" Content="Sign in" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
-        <TextBlock x:Name="fbLogin" Margin="0,0,0,9" Visibility="Collapsed" FontSize="12"><Hyperlink x:Name="hlLogin">Sign-in page didn't open? Click here</Hyperlink></TextBlock>
+        <DockPanel Margin="0,0,0,3"><TextBlock x:Name="txtTsLogin" Text="Connection: ..." VerticalAlignment="Center"/>
+          <Button x:Name="btnTsLogin" Content="Connect" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
+        <TextBlock x:Name="fbLogin" Margin="0,0,0,9" Visibility="Collapsed" FontSize="12"><Hyperlink x:Name="hlLogin">Still not connected? Click here to open the Tailscale app</Hyperlink></TextBlock>
         <DockPanel Margin="0,0,0,3"><TextBlock x:Name="txtTsFunnel" Text="Web link: ..." VerticalAlignment="Center"/>
           <Button x:Name="btnTsFunnel" Content="Turn on" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
         <TextBlock x:Name="fbFunnel" Visibility="Collapsed" FontSize="12"><Hyperlink x:Name="hlFunnel">Asked to enable Funnel? Click here, then Turn on again</Hyperlink></TextBlock>
@@ -298,9 +312,10 @@ namespace SB {
         $ts = Ts-State
         if ($ts.Installed) { $txtTsInst.Text = "Tailscale app: installed"; $btnTsInst.Visibility = "Collapsed" } else { $txtTsInst.Text = "Tailscale app: NOT installed - click Install"; $btnTsInst.Visibility = "Visible" }
         $btnTsLogin.IsEnabled = $ts.Installed
-        if ($ts.LoggedIn) { $txtTsLogin.Text = "Signed in: yes"; $btnTsLogin.Visibility = "Collapsed" } else { $txtTsLogin.Text = "Signed in: no"; $btnTsLogin.Visibility = $(if ($ts.Installed) { "Visible" } else { "Collapsed" }) }
-        $btnTsFunnel.IsEnabled = $ts.LoggedIn
-        if ($ts.FunnelOn -and $pub) { $txtTsFunnel.Text = "Web link: ON"; $btnTsFunnel.Visibility = "Collapsed" } else { $txtTsFunnel.Text = "Web link: off"; $btnTsFunnel.Visibility = $(if ($ts.LoggedIn) { "Visible" } else { "Collapsed" }) }
+        if ($ts.LoggedIn) { $txtTsLogin.Text = "Connection: connected" + $(if ($ts.Dns) { " ($($ts.Dns))" } else { "" }); $btnTsLogin.Visibility = "Collapsed"; $fbLogin.Visibility = "Collapsed" }
+        else { $txtTsLogin.Text = "Connection: not connected"; $btnTsLogin.Visibility = $(if ($ts.Installed) { "Visible" } else { "Collapsed" }) }
+        $btnTsFunnel.IsEnabled = $ts.Installed
+        if ($ts.FunnelOn -and $pub) { $txtTsFunnel.Text = "Web link: ON"; $btnTsFunnel.Visibility = "Collapsed" } else { $txtTsFunnel.Text = "Web link: off"; $btnTsFunnel.Visibility = $(if ($ts.Installed) { "Visible" } else { "Collapsed" }) }
 
         if ($conf -and $pub) {
             $runUrl.Text = $pub; $txtPass.Text = (Get-EnvVal "VAULT_OAUTH_PASSWORD")
@@ -343,24 +358,16 @@ namespace SB {
 
     $btnTsLogin.Add_Click({
             $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
-            Log "Starting Tailscale sign-in (a browser page should open)..."
-            $r = Run-TsCapture $ts @("login") "Opening Tailscale sign-in in your browser..." "https://login\.tailscale\.com/\S+"
-            if ($r.Url) {
-                $script:loginUrl = $r.Url; $fbLogin.Visibility = "Visible"
-                Log "Opened the sign-in page. Finish signing in, then click Refresh."
-            }
-            else {
-                Log ("tailscale login: " + ((($r.Output -split "`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join "  |  "))
-                $gui = Find-TailscaleGui; if ($gui) { try { Start-Process $gui } catch { } }
-                $script:loginUrl = "https://login.tailscale.com/start"; $fbLogin.Visibility = "Visible"
-                Log "No sign-in page detected. Use the 'click here' link below, then Refresh."
-            }
-            Info("Finish signing in to Tailscale in the browser, then click Refresh.`n`nIf no page opened, use the 'Click here' link in the card.")
+            Log "Connecting to Tailscale (opening the app to wake it up)..."
+            $ok = Ensure-TailscaleUp $ts
+            if ($ok) { Log "Tailscale is connected." } else { Log "Tailscale didn't connect in time. Open 'Tailscale' from your Start menu, make sure it shows Connected, then click Refresh."; $fbLogin.Visibility = "Visible" }
+            Refresh-UI
         })
-    $hlLogin.Add_Click({ if ($script:loginUrl) { try { Start-Process $script:loginUrl } catch { } } })
+    $hlLogin.Add_Click({ $g = Find-TailscaleGui; if ($g) { try { Start-Process $g } catch { } } })
 
     $btnTsFunnel.Add_Click({
             $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
+            if (-not (Ensure-TailscaleUp $ts)) { Log "Tailscale isn't connected yet. Click Connect first (or open Tailscale from the Start menu), then try again."; Refresh-UI; return }
             $port = Get-Port
             Log "Turning on your web link (tailscale funnel $port)..."
             $r = Run-Cli $ts @("funnel", "--bg", $port)
@@ -368,7 +375,7 @@ namespace SB {
             if ($r.Output -match "https://login\.tailscale\.com/f/funnel\S+") { $script:funnelUrl = $matches[0]; try { Start-Process $script:funnelUrl } catch { }; $fbFunnel.Visibility = "Visible"; Log "Funnel needs enabling once - opened the page. Click Allow, then Turn on again." }
             $st = Ts-State
             if ($st.Dns -and $st.FunnelOn) { Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$($st.Dns)"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $st.Dns; Log "Web link is ON: https://$($st.Dns)" }
-            elseif ($r.Output -match "denied|operator|admin") { Log "Tailscale needs permission. Sign in via the Tailscale app first (that makes you the operator), then try again." }
+            elseif ($r.Output -match "denied|operator|admin|NoState") { Log "Tailscale wasn't ready. Open 'Tailscale' from the Start menu, make sure it shows Connected, then click Turn on again." }
             Refresh-UI
         })
     $hlFunnel.Add_Click({ if ($script:funnelUrl) { try { Start-Process $script:funnelUrl } catch { } } })
