@@ -1,9 +1,8 @@
-# Second Brain - Control Center (WPF). Lightweight, no install, launched by
-# "Install Second Brain.cmd". State-aware: shows what's done and only prompts for
-# what's left. Heavy lifting stays in the tested scripts (setup.ps1 etc.).
+# Second Brain - Control Center (WPF). Lightweight, no install.
+# State-aware, with a live Activity log so you can always see what's happening
+# (and what failed). Heavy lifting stays in the tested scripts.
 
 try {
-    # Hide this console window so only the app shows.
     try {
         $sbHide = Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);' -Name H -Namespace SBHide -PassThru
         [void]$sbHide::ShowWindow($sbHide::GetConsoleWindow(), 0)
@@ -15,7 +14,6 @@ try {
     $scripts = $PSScriptRoot
     $root = Split-Path -Parent $scripts
 
-    # ---- modern (Explorer-style) folder picker ----
     $script:modernPicker = $false
     try {
         if (-not ("SB.FolderPicker" -as [type])) {
@@ -73,9 +71,25 @@ namespace SB {
         foreach ($p in @("$env:ProgramFiles\Tailscale\tailscale.exe", "${env:ProgramFiles(x86)}\Tailscale\tailscale.exe")) { if ($p -and (Test-Path $p)) { return $p } }
         return $null
     }
+    function Find-TailscaleGui {
+        $ts = Find-Tailscale; if (-not $ts) { return $null }
+        $g = Join-Path (Split-Path $ts) "tailscale-ipn.exe"; if (Test-Path $g) { return $g }
+        return $null
+    }
     function Refresh-Path { $m = [Environment]::GetEnvironmentVariable("Path", "Machine"); $u = [Environment]::GetEnvironmentVariable("Path", "User"); $env:Path = (@($m, $u) | Where-Object { $_ }) -join ";" }
     function Info($m, $t = "Second Brain") { [void][System.Windows.MessageBox]::Show($m, $t) }
     function Confirm($m, $t = "Second Brain") { [System.Windows.MessageBox]::Show($m, $t, "YesNo") -eq "Yes" }
+
+    # Run a CLI tool, capture combined output + exit code (short commands).
+    function Run-Cli([string]$exe, [string[]]$a) {
+        $o = [System.IO.Path]::GetTempFileName(); $e = [System.IO.Path]::GetTempFileName()
+        $code = -1
+        try { $p = Start-Process $exe -ArgumentList $a -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput $o -RedirectStandardError $e; $code = $p.ExitCode }
+        catch { return @{ Code = -1; Output = $_.Exception.Message } }
+        $t = ""; try { $t = ((Get-Content $o -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $e -Raw -ErrorAction SilentlyContinue)).Trim() } catch { }
+        Remove-Item $o, $e -ErrorAction SilentlyContinue
+        @{ Code = $code; Output = $t }
+    }
 
     function Ts-State {
         $s = @{ Installed = $false; LoggedIn = $false; Dns = ""; FunnelOn = $false; Exe = $null }
@@ -95,10 +109,9 @@ namespace SB {
         if ($d.ShowDialog() -eq "OK") { return $d.SelectedPath } else { return $null }
     }
 
-    # Small modal "please wait" with an indeterminate bar; closes when $doneCheck is true.
     function Show-Wait([string]$text, [scriptblock]$doneCheck) {
         $w = New-Object System.Windows.Window
-        $w.Title = "Please wait"; $w.Width = 380; $w.Height = 150; $w.WindowStartupLocation = "CenterOwner"
+        $w.Title = "Working..."; $w.Width = 380; $w.Height = 150; $w.WindowStartupLocation = "CenterOwner"
         try { $w.Owner = $script:win } catch { }
         $w.ResizeMode = "NoResize"; $w.WindowStyle = "ToolWindow"
         $sp = New-Object System.Windows.Controls.StackPanel; $sp.Margin = "20"
@@ -110,7 +123,6 @@ namespace SB {
         $t.Start(); [void]$w.ShowDialog(); $t.Stop()
     }
 
-    # Run a script hidden behind the wait window; success = printed marker (reliable).
     function Run-Task([string]$file, [string[]]$argList, [string]$workText, [string]$marker) {
         $out = [System.IO.Path]::GetTempFileName(); $err = [System.IO.Path]::GetTempFileName()
         $a = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$file`"") + $argList
@@ -124,28 +136,11 @@ namespace SB {
         [pscustomobject]@{ Ok = $ok; Output = $text }
     }
 
-    # Run a tailscale command hidden, watch its output for a login.tailscale.com
-    # URL, open it in the browser, and return it (for the fallback link).
-    function Run-TsCapture([string]$ts, [string[]]$tsArgs, [string]$workText, [string]$urlPattern) {
-        $f = [System.IO.Path]::GetTempFileName(); $f2 = [System.IO.Path]::GetTempFileName()
-        $script:cp = Start-Process $ts -ArgumentList $tsArgs -PassThru -WindowStyle Hidden -RedirectStandardOutput $f -RedirectStandardError $f2
-        $script:capUrl = $null
-        Show-Wait $workText {
-            if (-not $script:capUrl) {
-                $c = (Get-Content $f, $f2 -Raw -ErrorAction SilentlyContinue)
-                if ($c -and $c -match $urlPattern) { $script:capUrl = $matches[0]; try { Start-Process $script:capUrl } catch { } }
-            }
-            ($null -ne $script:capUrl) -or $script:cp.HasExited
-        }
-        Remove-Item $f, $f2 -ErrorAction SilentlyContinue
-        $script:capUrl
-    }
-
     # ---------- UI ----------
     [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Second Brain - Control Center" Height="660" Width="520"
+        Title="Second Brain - Control Center" Height="740" Width="520"
         WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize"
         Background="#F3F4F6" FontFamily="Segoe UI">
   <Window.Resources>
@@ -175,9 +170,11 @@ namespace SB {
   <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="18">
     <StackPanel>
       <DockPanel Margin="0,0,0,14">
-        <TextBlock Text="Second Brain" FontSize="22" FontWeight="Bold" Foreground="#111827"/>
-        <Border DockPanel.Dock="Right" Background="#FEE2E2" CornerRadius="12" Padding="12,5" HorizontalAlignment="Right" VerticalAlignment="Center">
-          <TextBlock x:Name="txtServerPill" Text="Server: stopped" Foreground="#991B1B" FontSize="12"/></Border>
+        <TextBlock Text="Second Brain" FontSize="22" FontWeight="Bold" Foreground="#111827" VerticalAlignment="Center"/>
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <Button x:Name="btnRefresh" Content="Refresh" Style="{StaticResource Ghost}" Margin="0,0,8,0"/>
+          <Border Background="#FEE2E2" CornerRadius="12" Padding="12,5"><TextBlock x:Name="txtServerPill" Text="Server: stopped" Foreground="#991B1B" FontSize="12"/></Border>
+        </StackPanel>
       </DockPanel>
 
       <Border Style="{StaticResource Card}"><StackPanel>
@@ -193,7 +190,7 @@ namespace SB {
       </StackPanel></Border>
 
       <Border Style="{StaticResource Card}"><StackPanel>
-        <TextBlock Style="{StaticResource H}" Text="3.  Connect your Second Brain (phone &amp; web)"/>
+        <TextBlock Style="{StaticResource H}" Text="3.  Connect your Second Brain"/>
         <DockPanel Margin="0,0,0,9"><TextBlock x:Name="txtTsInst" Text="Tailscale app: ..." VerticalAlignment="Center"/>
           <Button x:Name="btnTsInst" Content="Install" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
         <DockPanel Margin="0,0,0,3"><TextBlock x:Name="txtTsLogin" Text="Signed in: ..." VerticalAlignment="Center"/>
@@ -201,7 +198,7 @@ namespace SB {
         <TextBlock x:Name="fbLogin" Margin="0,0,0,9" Visibility="Collapsed" FontSize="12"><Hyperlink x:Name="hlLogin">Sign-in page didn't open? Click here</Hyperlink></TextBlock>
         <DockPanel Margin="0,0,0,3"><TextBlock x:Name="txtTsFunnel" Text="Web link: ..." VerticalAlignment="Center"/>
           <Button x:Name="btnTsFunnel" Content="Turn on" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
-        <TextBlock x:Name="fbFunnel" Visibility="Collapsed" FontSize="12"><Hyperlink x:Name="hlFunnel">Needs Funnel enabled? Click here, then Turn on again</Hyperlink></TextBlock>
+        <TextBlock x:Name="fbFunnel" Visibility="Collapsed" FontSize="12"><Hyperlink x:Name="hlFunnel">Asked to enable Funnel? Click here, then Turn on again</Hyperlink></TextBlock>
       </StackPanel></Border>
 
       <Border Style="{StaticResource Card}"><StackPanel>
@@ -212,7 +209,10 @@ namespace SB {
       </StackPanel></Border>
 
       <Border Style="{StaticResource Card}"><StackPanel>
-        <TextBlock Style="{StaticResource H}" Text="5.  Add to Claude"/>
+        <DockPanel Margin="0,0,0,10">
+          <TextBlock Text="5.  Add connector (to Claude / ChatGPT)" FontSize="14" FontWeight="SemiBold" Foreground="#111827" VerticalAlignment="Center"/>
+          <Button x:Name="btnConnInfo" Content="How?" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right" Padding="10,3"/>
+        </DockPanel>
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="30"/><RowDefinition Height="30"/></Grid.RowDefinitions>
@@ -228,6 +228,11 @@ namespace SB {
         </Grid>
       </StackPanel></Border>
 
+      <Border Style="{StaticResource Card}"><StackPanel>
+        <TextBlock Style="{StaticResource H}" Text="Activity"/>
+        <TextBox x:Name="logBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" FontFamily="Consolas" FontSize="11" Background="#F9FAFB" BorderBrush="#E5E7EB"/>
+      </StackPanel></Border>
+
       <DockPanel Margin="2,2,2,0">
         <CheckBox x:Name="chkAuto" Content="Start automatically when I turn on my PC" VerticalAlignment="Center"/>
         <Button x:Name="btnUninstall" Content="Uninstall" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
@@ -239,21 +244,25 @@ namespace SB {
     $reader = New-Object System.Xml.XmlNodeReader $xaml
     $win = [System.Windows.Markup.XamlReader]::Load($reader)
     $script:win = $win
+    $el = { param($n) $win.FindName($n) }
 
-    # element handles
-    $el = {param($n) $win.FindName($n)}
-    $txtServerPill = & $el "txtServerPill"
+    $btnRefresh = & $el "btnRefresh"; $txtServerPill = & $el "txtServerPill"
     $txtPy = & $el "txtPy"; $btnPy = & $el "btnPy"
     $txtVault = & $el "txtVault"; $btnSetup = & $el "btnSetup"
     $txtTsInst = & $el "txtTsInst"; $btnTsInst = & $el "btnTsInst"
     $txtTsLogin = & $el "txtTsLogin"; $btnTsLogin = & $el "btnTsLogin"; $fbLogin = & $el "fbLogin"; $hlLogin = & $el "hlLogin"
     $txtTsFunnel = & $el "txtTsFunnel"; $btnTsFunnel = & $el "btnTsFunnel"; $fbFunnel = & $el "fbFunnel"; $hlFunnel = & $el "hlFunnel"
     $txtSrv = & $el "txtSrv"; $btnStart = & $el "btnStart"; $btnStop = & $el "btnStop"
-    $hlUrl = & $el "hlUrl"; $runUrl = & $el "runUrl"
+    $btnConnInfo = & $el "btnConnInfo"; $hlUrl = & $el "hlUrl"; $runUrl = & $el "runUrl"
     $btnCopyLink = & $el "btnCopyLink"; $txtUser = & $el "txtUser"; $btnCopyUser = & $el "btnCopyUser"; $txtPass = & $el "txtPass"; $btnCopyPass = & $el "btnCopyPass"
-    $chkAuto = & $el "chkAuto"; $btnUninstall = & $el "btnUninstall"
+    $logBox = & $el "logBox"; $chkAuto = & $el "chkAuto"; $btnUninstall = & $el "btnUninstall"
 
-    $script:loginUrl = $null; $script:funnelUrl = $null
+    $script:loginUrl = "https://login.tailscale.com/start"; $script:funnelUrl = $null
+
+    function Log([string]$m) {
+        try { $logBox.AppendText((Get-Date -Format "HH:mm:ss") + "  " + $m + "`r`n"); $logBox.ScrollToEnd() } catch { }
+    }
+    function Copy-To([string]$s) { try { [System.Windows.Clipboard]::SetText($s) } catch { } }
 
     function Refresh-UI {
         $py = Have-Python; $conf = Test-Configured; $inst = Test-Installed; $run = Test-Running
@@ -263,17 +272,17 @@ namespace SB {
         $txtSrv.Text = $(if ($run) { "Running" } else { "Stopped" })
         $btnStart.IsEnabled = ($conf -and $inst -and -not $run); $btnStop.IsEnabled = $run
 
-        if ($py) { $txtPy.Text = "Python: installed"; $btnPy.Visibility = "Collapsed" } else { $txtPy.Text = "Python: not installed"; $btnPy.Visibility = "Visible" }
+        if ($py) { $txtPy.Text = "Python: installed"; $btnPy.Visibility = "Collapsed" } else { $txtPy.Text = "Python: NOT installed - click Install"; $btnPy.Visibility = "Visible" }
 
         $btnSetup.IsEnabled = $py
-        if ($conf) { $vp = Get-EnvVal "VAULT_PATH"; $txtVault.Text = "Folder: $vp"; $btnSetup.Content = "Change" } else { $txtVault.Text = "Not set up yet"; $btnSetup.Content = "Set up" }
+        if ($conf) { $txtVault.Text = "Folder: " + (Get-EnvVal "VAULT_PATH"); $btnSetup.Content = "Change" } else { $txtVault.Text = "Not set up yet"; $btnSetup.Content = "Set up" }
 
         $ts = Ts-State
-        if ($ts.Installed) { $txtTsInst.Text = "Tailscale app: installed"; $btnTsInst.Visibility = "Collapsed" } else { $txtTsInst.Text = "Tailscale app: not installed"; $btnTsInst.Visibility = "Visible" }
+        if ($ts.Installed) { $txtTsInst.Text = "Tailscale app: installed"; $btnTsInst.Visibility = "Collapsed" } else { $txtTsInst.Text = "Tailscale app: NOT installed - click Install"; $btnTsInst.Visibility = "Visible" }
         $btnTsLogin.IsEnabled = $ts.Installed
         if ($ts.LoggedIn) { $txtTsLogin.Text = "Signed in: yes"; $btnTsLogin.Visibility = "Collapsed" } else { $txtTsLogin.Text = "Signed in: no"; $btnTsLogin.Visibility = $(if ($ts.Installed) { "Visible" } else { "Collapsed" }) }
         $btnTsFunnel.IsEnabled = $ts.LoggedIn
-        if ($ts.FunnelOn -and $pub) { $txtTsFunnel.Text = "Web link: on"; $btnTsFunnel.Visibility = "Collapsed" } else { $txtTsFunnel.Text = "Web link: off"; $btnTsFunnel.Visibility = $(if ($ts.LoggedIn) { "Visible" } else { "Collapsed" }) }
+        if ($ts.FunnelOn -and $pub) { $txtTsFunnel.Text = "Web link: ON"; $btnTsFunnel.Visibility = "Collapsed" } else { $txtTsFunnel.Text = "Web link: off"; $btnTsFunnel.Visibility = $(if ($ts.LoggedIn) { "Visible" } else { "Collapsed" }) }
 
         if ($conf -and $pub) {
             $runUrl.Text = $pub; $txtPass.Text = (Get-EnvVal "VAULT_OAUTH_PASSWORD")
@@ -282,72 +291,107 @@ namespace SB {
         else { $runUrl.Text = "(finish step 3)"; $txtPass.Text = "-"; $btnCopyLink.IsEnabled = $false; $btnCopyPass.IsEnabled = $false }
     }
 
-    function Copy-To([string]$s) { try { [System.Windows.Clipboard]::SetText($s) } catch { } }
-
     # ---------- events ----------
+    $btnRefresh.Add_Click({ Log "Refreshing status..."; Refresh-UI; Log "Ready." })
+
     $btnPy.Add_Click({
             if (Have-Winget) {
+                Log "Installing Python (a winget window will appear)..."
                 Start-Process winget -ArgumentList "install", "-e", "--id", "Python.Python.3.12", "--scope", "user", "--accept-source-agreements", "--accept-package-agreements" -Wait
                 Refresh-Path
                 if (-not (Have-Python)) { Info("Python installed. Please close this app and open it again to continue."); $win.Close(); return }
+                Log "Python installed."
             }
-            else { Start-Process "https://www.python.org/downloads/"; Info("Install Python (tick 'Add to PATH'), then reopen this app.") }
+            else { Start-Process "https://www.python.org/downloads/"; Log "Opened the Python download page." }
             Refresh-UI
         })
 
     $btnSetup.Add_Click({
             $folder = Pick-Folder "Choose your notes folder (your Obsidian vault)"
             if (-not $folder) { return }
+            Log "Setting up your Second Brain at: $folder"
             $r = Run-Task (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$folder`"") "Setting up - installing components. About a minute, please wait..." "SB_SETUP_SUCCESS"
+            if ($r.Ok) { Log "Setup complete." ; Info("Done. Your Second Brain is set up.") } else { Log "Setup FAILED: $($r.Output)"; Info("Setup couldn't finish - see the Activity log.") }
             Refresh-UI
-            if ($r.Ok) { Info("Done. Your Second Brain is set up.") } else { Info("Setup couldn't finish - please try again.`n`n" + $r.Output) }
         })
 
     $btnTsInst.Add_Click({
-            if (-not (Have-Winget)) { Start-Process "https://tailscale.com/download"; Info("Install Tailscale, then come back."); return }
+            if (-not (Have-Winget)) { Start-Process "https://tailscale.com/download"; Log "Opened the Tailscale download page."; return }
+            Log "Installing Tailscale (a winget window appears; Windows may ask permission)..."
             Start-Process winget -ArgumentList "install", "-e", "--id", "Tailscale.Tailscale", "--accept-source-agreements", "--accept-package-agreements" -Wait
+            Log "Tailscale install finished."
             Refresh-Path; Refresh-UI
         })
 
     $btnTsLogin.Add_Click({
-            $ts = Find-Tailscale; if (-not $ts) { Refresh-UI; return }
-            $u = Run-TsCapture $ts @("up") "Opening Tailscale sign-in in your browser..." "https://login\.tailscale\.com/\S+"
-            if ($u) { $script:loginUrl = $u; $fbLogin.Visibility = "Visible" }
-            Info("Finish signing in in the browser that opened, then this window updates. (If it didn't open, use the 'Click here' link.)")
-            Refresh-UI
+            $gui = Find-TailscaleGui
+            Log "Opening the Tailscale app so you can sign in..."
+            if ($gui) { try { Start-Process $gui } catch { } } else { Log "Tailscale app not found; opening the web sign-in instead." }
+            $ts = Find-Tailscale
+            if ($ts) { try { Start-Process $ts -ArgumentList "up" -WindowStyle Hidden } catch { } }   # nudge the login flow
+            $script:loginUrl = "https://login.tailscale.com/start"; $fbLogin.Visibility = "Visible"
+            Info("Sign in to Tailscale in the Tailscale window (or the tray icon, bottom-right). If nothing opened, click the 'Click here' link. When done, click Refresh.")
         })
-    $hlLogin.Add_Click({ if ($script:loginUrl) { Start-Process $script:loginUrl } })
+    $hlLogin.Add_Click({ if ($script:loginUrl) { try { Start-Process $script:loginUrl } catch { } } })
 
     $btnTsFunnel.Add_Click({
-            $ts = Find-Tailscale; if (-not $ts) { return }
-            $u = Run-TsCapture $ts @("funnel", "--bg", (Get-Port)) "Turning on your web link..." "https://login\.tailscale\.com/f/funnel\S+"
-            if ($u) { $script:funnelUrl = $u; $fbFunnel.Visibility = "Visible" }
+            $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
+            $port = Get-Port
+            Log "Turning on your web link (tailscale funnel $port)..."
+            $r = Run-Cli $ts @("funnel", "--bg", $port)
+            if ($r.Output) { Log ("tailscale: " + ((($r.Output -split "`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join "  |  ")) }
+            if ($r.Output -match "https://login\.tailscale\.com/f/funnel\S+") { $script:funnelUrl = $matches[0]; try { Start-Process $script:funnelUrl } catch { }; $fbFunnel.Visibility = "Visible"; Log "Funnel needs enabling once - opened the page. Click Allow, then Turn on again." }
             $st = Ts-State
-            if ($st.Dns) { Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$($st.Dns)"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $st.Dns }
+            if ($st.Dns -and $st.FunnelOn) { Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$($st.Dns)"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $st.Dns; Log "Web link is ON: https://$($st.Dns)" }
+            elseif ($r.Output -match "denied|operator|admin") { Log "Tailscale needs permission. Sign in via the Tailscale app first (that makes you the operator), then try again." }
             Refresh-UI
-            if ((Get-EnvVal "VAULT_MCP_PUBLIC_URL") -and -not $u) { Info("Your web link is ready. Now Start the server (step 4).") }
         })
-    $hlFunnel.Add_Click({ if ($script:funnelUrl) { Start-Process $script:funnelUrl } })
+    $hlFunnel.Add_Click({ if ($script:funnelUrl) { try { Start-Process $script:funnelUrl } catch { } } })
 
-    $btnStart.Add_Click({ Run-Hidden (Join-Path $root "run.ps1") @(); Start-Sleep -Seconds 3; Refresh-UI; if (-not (Test-Running)) { Info("It didn't start. Make sure step 2 finished, then try again.") } })
-    $btnStop.Add_Click({ [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Stopping the server..." $null); Refresh-UI })
+    $btnStart.Add_Click({
+            Log "Starting the server..."
+            Run-Hidden (Join-Path $root "run.ps1") @(); Start-Sleep -Seconds 3; Refresh-UI
+            if (Test-Running) { Log "Server is running." } else { Log "Server did NOT start. Make sure step 2 finished."; Info("It didn't start - see the Activity log.") }
+        })
+    $btnStop.Add_Click({ Log "Stopping the server..."; [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Stopping the server..." $null); Refresh-UI; Log "Server stopped." })
 
-    $hlUrl.Add_Click({ $u = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; if ($u) { Start-Process $u } })
-    $btnCopyLink.Add_Click({ Copy-To (Get-EnvVal "VAULT_MCP_PUBLIC_URL") })
-    $btnCopyUser.Add_Click({ Copy-To "obsidian" })
-    $btnCopyPass.Add_Click({ Copy-To (Get-EnvVal "VAULT_OAUTH_PASSWORD") })
+    $btnConnInfo.Add_Click({
+            Info(@"
+How to add the connector:
 
-    $btnUninstall.Add_Click({ if (Confirm("Remove the install? Your notes are NOT touched.")) { [void](Run-Task (Join-Path $scripts "uninstall.ps1") @("-Yes") "Removing the install..." $null); Refresh-UI } })
+CLAUDE  (claude.ai or the desktop app; paid plan)
+  1. Settings  ->  Connectors  ->  Add custom connector
+  2. Paste the Link shown below
+  3. When it opens a sign-in page, log in with:
+       username:  obsidian
+       password:  (the Password shown below)
+
+CHATGPT
+  1. Settings  ->  Connectors  ->  turn on Developer mode
+  2. Add the same Link
+     (Developer mode is required for write access)
+
+Tip: use the Copy buttons next to the Link and Password.
+"@, "Add connector")
+        })
+
+    $hlUrl.Add_Click({ $u = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; if ($u) { try { Start-Process $u } catch { } } })
+    $btnCopyLink.Add_Click({ Copy-To (Get-EnvVal "VAULT_MCP_PUBLIC_URL"); Log "Copied the link." })
+    $btnCopyUser.Add_Click({ Copy-To "obsidian"; Log "Copied the username." })
+    $btnCopyPass.Add_Click({ Copy-To (Get-EnvVal "VAULT_OAUTH_PASSWORD"); Log "Copied the password." })
+
+    $btnUninstall.Add_Click({ if (Confirm("Remove the install? Your notes are NOT touched.")) { Log "Uninstalling..."; [void](Run-Task (Join-Path $scripts "uninstall.ps1") @("-Yes") "Removing the install..." $null); Refresh-UI; Log "Uninstalled." } })
 
     $script:autoBusy = $true
     try { $chkAuto.IsChecked = ((& (Join-Path $scripts "autostart.ps1") -Action status) -eq "enabled") } catch { }
     $script:autoBusy = $false
     $chkAuto.Add_Click({
             if ($script:autoBusy) { return }
-            try { $act = if ($chkAuto.IsChecked) { "enable" } else { "disable" }; & (Join-Path $scripts "autostart.ps1") -Action $act | Out-Null } catch { Info("Couldn't change auto-start: $($_.Exception.Message)") }
+            try { $act = if ($chkAuto.IsChecked) { "enable" } else { "disable" }; & (Join-Path $scripts "autostart.ps1") -Action $act | Out-Null; Log "Auto-start: $act" } catch { Info("Couldn't change auto-start: $($_.Exception.Message)") }
         })
 
     Refresh-UI
+    Log "Ready. Follow steps 1-5. This log shows what's happening."
     [void]$win.ShowDialog()
 }
 catch {
