@@ -43,19 +43,40 @@ $venvPy = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPy)) {
     & $py.Source -m venv (Join-Path $root ".venv")
 }
+
+# Best-effort: remove corrupted leftover distributions (~*) from a previously
+# interrupted install, so pip doesn't spew "Ignoring invalid distribution"
+# warnings. Wrapped so it can NEVER break setup (the import check below is the
+# real success gate).
+$sitePkgs = Join-Path $root ".venv\Lib\site-packages"
+try {
+    if (Test-Path $sitePkgs) {
+        Get-ChildItem $sitePkgs -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "~*" } |
+            ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+}
+catch { }
+
 if (-not $SkipInstall) {
-    # pip prints harmless notices to stderr; don't let that look like a failure.
-    # Judge success by pip's real exit code instead.
+    # pip writes harmless notices to stderr and its exit code is finicky; let it
+    # run, then judge success by whether the components actually import (below).
     $ErrorActionPreference = "Continue"
     Write-Progress -Activity $act -Status "Updating the installer..." -PercentComplete 25
     & $venvPy -m pip install --upgrade pip | Out-Null
     Write-Progress -Activity $act -Status "Installing components - about a minute, please wait..." -PercentComplete 45
     Write-Host "Installing components (about a minute). Packages download below:" -ForegroundColor Cyan
     & $venvPy -m pip install -e $root
-    $pipCode = $LASTEXITCODE
     $ErrorActionPreference = "Stop"
-    if ($pipCode -ne 0) { throw "Could not install the components (error $pipCode). Check your internet connection and try again." }
 }
+
+# The real success test: can the server's components be imported?
+Write-Progress -Activity $act -Status "Checking the install..." -PercentComplete 80
+$ErrorActionPreference = "Continue"
+& $venvPy -c "import second_brain_ext, obsidian_vault_mcp" 2>$null
+$impCode = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
+if ($impCode -ne 0) { throw "The components did not install correctly. Please check your internet connection and try Step 2 again." }
 Write-Progress -Activity $act -Status "Writing your settings..." -PercentComplete 85
 
 # 4. Ask for the vault path if not supplied, and sanity-check it.
