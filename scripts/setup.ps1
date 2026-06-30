@@ -129,5 +129,6 @@ Write-Host ""
 Write-Host "  You can CLOSE this window now and go back to the app:"
 Write-Host "  click 'Step 3 - Start'. (The password also shows there.)"
 Write-Host "=================================================="
+Write-Output "SB_SETUP_SUCCESS"   # success marker the app checks for (don't remove)
 Pause-IfAsked
-exit 0   # deterministic success (don't leak a leftover native exit code)
+exit 0

@@ -118,5 +118,6 @@ switch ($Mode) {
     }
 }
 
+Write-Output "SB_WEBLINK_SUCCESS"   # success marker the app checks for (don't remove)
 Pause-IfAsked
-exit 0   # deterministic success (don't leak a leftover native exit code, e.g. from tailscale)
+exit 0

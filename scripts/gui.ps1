@@ -122,8 +122,10 @@ namespace SB {
         $dlg.Description = $title
         if ($dlg.ShowDialog() -eq "OK") { return $dlg.SelectedPath } else { return $null }
     }
-    function Invoke-Hidden([string]$file, [string[]]$argList, [string]$workingText) {
+    function Invoke-Hidden([string]$file, [string[]]$argList, [string]$workingText, [string]$successToken) {
         # Run a script HIDDEN while showing a clean "please wait" bar; return Ok + Output.
+        # Success is judged by a marker the script prints on completion (reliable),
+        # falling back to the exit code when no marker is given.
         $out = [System.IO.Path]::GetTempFileName(); $err = [System.IO.Path]::GetTempFileName()
         $a = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$file`"") + $argList
         $script:hpProc = Start-Process powershell -WindowStyle Hidden -PassThru -RedirectStandardOutput $out -RedirectStandardError $err -ArgumentList $a
@@ -142,12 +144,20 @@ namespace SB {
         $script:hpTimer.Start()
         [void]$w.ShowDialog($form)
         $script:hpTimer.Dispose()
+        try { $script:hpProc.WaitForExit() } catch { }   # ensure output is fully flushed
 
-        $code = $script:hpProc.ExitCode
         $text = ""
         try { $text = ((Get-Content $out -Raw -ErrorAction SilentlyContinue) + "`r`n" + (Get-Content $err -Raw -ErrorAction SilentlyContinue)).Trim() } catch { }
         Remove-Item $out, $err -ErrorAction SilentlyContinue
-        return [pscustomobject]@{ Ok = ($code -eq 0); Output = $text }
+
+        if ($successToken) {
+            $ok = [bool]($text -match [regex]::Escape($successToken))
+            $text = ($text -replace [regex]::Escape($successToken), "").Trim()
+        }
+        else {
+            $ok = $false; try { $ok = ($script:hpProc.ExitCode -eq 0) } catch { }
+        }
+        return [pscustomobject]@{ Ok = $ok; Output = $text }
     }
 
     # ---------- window ----------
@@ -286,7 +296,7 @@ namespace SB {
     $btnSetup.Add_Click({
             $folder = Pick-Folder "Choose your notes folder (your Obsidian vault)"
             if (-not $folder) { return }
-            $r = Invoke-Hidden (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$folder`"") "Setting up - installing components.`r`nThis takes about a minute. Please wait..."
+            $r = Invoke-Hidden (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$folder`"") "Setting up - installing components.`r`nThis takes about a minute. Please wait..." "SB_SETUP_SUCCESS"
             Refresh-UI
             if ($r.Ok) { Info("Setup complete! Now do Step 3 - set up your web link.") }
             else { Info("Setup couldn't finish. This is often a temporary internet issue - please try again.`n`nLast details:`n" + (Tail $r.Output)) }
@@ -307,7 +317,7 @@ namespace SB {
             }
             $tsDir = Split-Path -Parent $ts
             if (";$env:Path;" -notlike "*;$tsDir;*") { $env:Path = "$tsDir;$env:Path" }
-            $r = Invoke-Hidden (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale") "Setting up your web link...`r`nIf a browser opens, sign in to Tailscale, then come back."
+            $r = Invoke-Hidden (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale") "Setting up your web link...`r`nIf a browser opens, sign in to Tailscale, then come back." "SB_WEBLINK_SUCCESS"
             Refresh-UI
             if ($r.Ok) {
                 $pub = Get-EnvVal "VAULT_MCP_PUBLIC_URL"
