@@ -55,13 +55,10 @@ never open a terminal or type a command.
      **Install for me** — it installs automatically and the app keeps going.
    - **Step 2 — Choose my notes folder:** pick the folder where your notes live. A
      progress bar shows it working (the first install takes about a minute).
-   - **Step 3 — How will you use it?**
-     - **From my phone & the web (recommended)** — sets up a free **Tailscale**
-       link so **Claude on your phone** and **claude.ai in a browser** can reach
-       it (they can't see an address that only exists on your PC). You sign in to
-       Tailscale once when the browser opens.
-     - **Only on this computer** — for Claude Desktop / Claude Code running on the
-       *same* PC.
+   - **Step 3 — Set up your web link:** click it once — it installs **Tailscale**
+     (free) and gives you a link so **Claude on your phone** and **claude.ai in a
+     browser** can reach your PC (they can't see an address that only exists on
+     your machine). You sign in to Tailscale once when the browser opens.
    - **Step 4 — Start.** The server runs quietly in the background (no window to
      babysit).
    - **Step 5 — Add to Claude:** the window shows a **link** and **password** with a

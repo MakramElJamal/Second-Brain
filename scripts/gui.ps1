@@ -1,6 +1,8 @@
 # Second Brain - friendly setup window. No terminal, no commands.
 # Launched by "Install Second Brain.cmd". Everything below is buttons.
-# Flow: 1) requirements  2) set up  3) how you'll use it  4) start  5) add to Claude.
+# Flow: 1) requirements  2) set up  3) web link  4) start  5) add to Claude.
+# (Local-only mode is intentionally not shown here - it's for developers via
+#  scripts\connect.ps1 -Mode local.)
 
 try {
     Add-Type -AssemblyName System.Windows.Forms
@@ -55,7 +57,7 @@ try {
     # ---------- window ----------
     $form = New-Object Windows.Forms.Form
     $form.Text = "Second Brain - Setup"
-    $form.Size = New-Object Drawing.Size(500, 620)
+    $form.Size = New-Object Drawing.Size(500, 560)
     $form.StartPosition = "CenterScreen"
     $form.FormBorderStyle = "FixedDialog"; $form.MaximizeBox = $false
     $form.BackColor = [Drawing.Color]::White
@@ -92,39 +94,32 @@ try {
     $btnSetup.Font = New-Object Drawing.Font("Segoe UI", 10)
     $form.Controls.Add($btnSetup)
 
-    # ----- Step 3: how will you use it -----
-    $g2 = New-Object Windows.Forms.GroupBox
-    $g2.Text = "Step 3  -  How will you use it?"
-    $g2.Location = New-Object Drawing.Point(20, 200); $g2.Size = New-Object Drawing.Size(450, 112)
-    $form.Controls.Add($g2)
+    # ----- Step 3: web link -----
     $btnWeb = New-Object Windows.Forms.Button
-    $btnWeb.Text = "From my phone and the web   (recommended)"
-    $btnWeb.Location = New-Object Drawing.Point(14, 22); $btnWeb.Size = New-Object Drawing.Size(420, 34)
-    $btnWeb.Font = New-Object Drawing.Font("Segoe UI", 10, [Drawing.FontStyle]::Bold)
-    $g2.Controls.Add($btnWeb)
-    $btnLocal = New-Object Windows.Forms.Button
-    $btnLocal.Text = "Only on this computer"
-    $btnLocal.Location = New-Object Drawing.Point(14, 60); $btnLocal.Size = New-Object Drawing.Size(420, 26)
-    $g2.Controls.Add($btnLocal)
-    $lblMode = New-Object Windows.Forms.Label
-    $lblMode.Location = New-Object Drawing.Point(16, 90); $lblMode.Size = New-Object Drawing.Size(418, 18)
-    $g2.Controls.Add($lblMode)
+    $btnWeb.Text = "Step 3  -  Set up my web link (phone and web)"
+    $btnWeb.Location = New-Object Drawing.Point(20, 200); $btnWeb.Size = New-Object Drawing.Size(450, 42)
+    $btnWeb.Font = New-Object Drawing.Font("Segoe UI", 10)
+    $form.Controls.Add($btnWeb)
+    $lblWeb = New-Object Windows.Forms.Label
+    $lblWeb.Location = New-Object Drawing.Point(22, 244); $lblWeb.Size = New-Object Drawing.Size(450, 16)
+    $lblWeb.ForeColor = [Drawing.Color]::DimGray
+    $form.Controls.Add($lblWeb)
 
     # ----- Step 4: start -----
     $btnStart = New-Object Windows.Forms.Button
     $btnStart.Text = "Step 4  -  Start"
-    $btnStart.Location = New-Object Drawing.Point(20, 322); $btnStart.Size = New-Object Drawing.Size(220, 42)
+    $btnStart.Location = New-Object Drawing.Point(20, 268); $btnStart.Size = New-Object Drawing.Size(220, 42)
     $btnStart.Font = New-Object Drawing.Font("Segoe UI", 10)
     $form.Controls.Add($btnStart)
     $btnStop = New-Object Windows.Forms.Button
     $btnStop.Text = "Stop"
-    $btnStop.Location = New-Object Drawing.Point(250, 322); $btnStop.Size = New-Object Drawing.Size(220, 42)
+    $btnStop.Location = New-Object Drawing.Point(250, 268); $btnStop.Size = New-Object Drawing.Size(220, 42)
     $form.Controls.Add($btnStop)
 
     # ----- Step 5: add to Claude -----
     $g3 = New-Object Windows.Forms.GroupBox
     $g3.Text = "Step 5  -  Add this to Claude"
-    $g3.Location = New-Object Drawing.Point(20, 372); $g3.Size = New-Object Drawing.Size(450, 100)
+    $g3.Location = New-Object Drawing.Point(20, 318); $g3.Size = New-Object Drawing.Size(450, 100)
     $form.Controls.Add($g3)
     $lblConn = New-Object Windows.Forms.Label
     $lblConn.Location = New-Object Drawing.Point(14, 22); $lblConn.Size = New-Object Drawing.Size(424, 46)
@@ -137,19 +132,19 @@ try {
 
     # ----- status, auto-start, uninstall -----
     $lblStatus = New-Object Windows.Forms.Label
-    $lblStatus.Location = New-Object Drawing.Point(22, 480); $lblStatus.Size = New-Object Drawing.Size(300, 34)
+    $lblStatus.Location = New-Object Drawing.Point(22, 426); $lblStatus.Size = New-Object Drawing.Size(300, 34)
     $lblStatus.ForeColor = [Drawing.Color]::DimGray
     $form.Controls.Add($lblStatus)
 
     $chkAuto = New-Object Windows.Forms.CheckBox
     $chkAuto.Text = "Start automatically when I turn on my PC"
-    $chkAuto.Location = New-Object Drawing.Point(22, 518); $chkAuto.Size = New-Object Drawing.Size(325, 24)
+    $chkAuto.Location = New-Object Drawing.Point(22, 464); $chkAuto.Size = New-Object Drawing.Size(325, 24)
     $form.Controls.Add($chkAuto)
     $script:autoBusy = $false
 
     $btnUninstall = New-Object Windows.Forms.Button
     $btnUninstall.Text = "Uninstall"
-    $btnUninstall.Location = New-Object Drawing.Point(355, 514); $btnUninstall.Size = New-Object Drawing.Size(115, 28)
+    $btnUninstall.Location = New-Object Drawing.Point(355, 460); $btnUninstall.Size = New-Object Drawing.Size(115, 28)
     $btnUninstall.ForeColor = [Drawing.Color]::Firebrick
     $form.Controls.Add($btnUninstall)
 
@@ -166,21 +161,24 @@ try {
 
         $btnSetup.Enabled = $py
         $btnWeb.Enabled = $configured
-        $btnLocal.Enabled = $configured
         $btnStart.Enabled = ($configured -and $installed -and -not $running)
         $btnStop.Enabled = $running
 
-        if (-not $configured) { $lblMode.Text = "(finish Step 2 first)"; $lblMode.ForeColor = [Drawing.Color]::Gray }
-        elseif ($pub) { $lblMode.Text = "Now: web link (Tailscale) - works on your phone and claude.ai"; $lblMode.ForeColor = [Drawing.Color]::SeaGreen }
-        else { $lblMode.Text = "Now: this computer only (pick an option above)"; $lblMode.ForeColor = [Drawing.Color]::DimGray }
+        if (-not $configured) { $lblWeb.Text = "" }
+        elseif ($pub) { $lblWeb.Text = "Web link ready - works on your phone and claude.ai."; $lblWeb.ForeColor = [Drawing.Color]::SeaGreen }
+        else { $lblWeb.Text = "Installs Tailscale (free) and signs you in once. Recommended."; $lblWeb.ForeColor = [Drawing.Color]::DimGray }
 
-        if ($configured) {
-            $port = Get-Port; $pass = Get-EnvVal "VAULT_OAUTH_PASSWORD"
-            $url = $pub; if (-not $url) { $url = "http://127.0.0.1:$port" }
-            $lblConn.Text = "Link:      $url`r`nUsername:  obsidian`r`nPassword:  $pass"
+        if (-not $configured) {
+            $lblConn.Text = "(finish Step 2 first)"; $btnCopy.Enabled = $false
+        }
+        elseif (-not $pub) {
+            $lblConn.Text = "Do Step 3 to create your web link -`r`nit appears here with your password."; $btnCopy.Enabled = $false
+        }
+        else {
+            $pass = Get-EnvVal "VAULT_OAUTH_PASSWORD"
+            $lblConn.Text = "Link:      $pub`r`nUsername:  obsidian`r`nPassword:  $pass"
             $btnCopy.Enabled = $true
         }
-        else { $lblConn.Text = "(finish Step 2 first)"; $btnCopy.Enabled = $false }
 
         $lblStatus.Text = "Installed: $(if($installed){'yes'}else{'no'})   Set up: $(if($configured){'yes'}else{'no'})`r`nServer: $(if($running){'RUNNING'}else{'stopped'})"
     }
@@ -205,7 +203,7 @@ try {
             $dlg = New-Object Windows.Forms.FolderBrowserDialog
             $dlg.Description = "Choose your notes folder (your Obsidian vault)"
             if ($dlg.ShowDialog() -ne "OK") { return }
-            Info("Setting up. A window opens with a progress bar - let it finish (about a minute). Then come back and choose Step 3.")
+            Info("Setting up. A window opens with a progress bar - let it finish (about a minute). Then come back and do Step 3.")
             Run-Window (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$($dlg.SelectedPath)`"")
         })
 
@@ -229,13 +227,6 @@ try {
             Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale")
         })
 
-    $btnLocal.Add_Click({
-            try { & (Join-Path $scripts "connect.ps1") -Mode local | Out-Null }
-            catch { Info("Couldn't set local mode:`n$($_.Exception.Message)"); return }
-            Refresh-UI
-            Info("Set to: only on this computer. This works with Claude Desktop / Claude Code on THIS PC. Now click Step 4 - Start.")
-        })
-
     $btnStart.Add_Click({
             Run-Hidden (Join-Path $root "run.ps1") @()
             Start-Sleep -Seconds 3
@@ -246,9 +237,10 @@ try {
     $btnStop.Add_Click({ Run-Window (Join-Path $scripts "stop.ps1") @("-Quiet") -Wait; Refresh-UI })
 
     $btnCopy.Add_Click({
-            $port = Get-Port; $pass = Get-EnvVal "VAULT_OAUTH_PASSWORD"
-            $url = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; if (-not $url) { $url = "http://127.0.0.1:$port" }
-            [System.Windows.Forms.Clipboard]::SetText("Link: $url`r`nUsername: obsidian`r`nPassword: $pass")
+            $pub = Get-EnvVal "VAULT_MCP_PUBLIC_URL"
+            if (-not $pub) { Info("Do Step 3 first to create your web link."); return }
+            $pass = Get-EnvVal "VAULT_OAUTH_PASSWORD"
+            [System.Windows.Forms.Clipboard]::SetText("Link: $pub`r`nUsername: obsidian`r`nPassword: $pass")
             Info("Copied. In Claude: Settings -> Connectors -> Add custom connector, paste the Link, then sign in with the username and password.")
         })
 
