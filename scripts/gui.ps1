@@ -3,6 +3,14 @@
 # run hidden and show a clean "Please wait" progress bar inside the app.
 
 try {
+    # Hide this PowerShell console window so only the app window shows (and so the
+    # user can't accidentally close the console and kill the app).
+    try {
+        $sbHide = Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);' -Name H -Namespace SBHide -PassThru
+        [void]$sbHide::ShowWindow($sbHide::GetConsoleWindow(), 0)   # 0 = SW_HIDE
+    }
+    catch { }
+
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -88,6 +96,10 @@ namespace SB {
         return $null
     }
     function Info($m, $t = "Second Brain") { [void][System.Windows.Forms.MessageBox]::Show($m, $t) }
+    function Tail($text, $n = 8) {
+        if (-not $text) { return "" }
+        (($text -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last $n) -join "`r`n"
+    }
     function Refresh-Path {
         $m = [Environment]::GetEnvironmentVariable("Path", "Machine")
         $u = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -277,7 +289,7 @@ namespace SB {
             $r = Invoke-Hidden (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$folder`"") "Setting up - installing components.`r`nThis takes about a minute. Please wait..."
             Refresh-UI
             if ($r.Ok) { Info("Setup complete! Now do Step 3 - set up your web link.") }
-            else { Info("Setup had a problem:`n`n" + $r.Output) }
+            else { Info("Setup couldn't finish. This is often a temporary internet issue - please try again.`n`nLast details:`n" + (Tail $r.Output)) }
         })
 
     $btnWeb.Add_Click({
@@ -302,7 +314,7 @@ namespace SB {
                 Info("Your web link is ready:`n`n$pub`n`nNow click Step 4 - Start.")
             }
             else {
-                Info("Couldn't finish the web link. Here is what it said:`n`n" + $r.Output)
+                Info("Couldn't finish the web link - please try again.`n`nLast details:`n" + (Tail $r.Output))
             }
         })
 

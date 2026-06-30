@@ -44,11 +44,17 @@ if (-not (Test-Path $venvPy)) {
     & $py.Source -m venv (Join-Path $root ".venv")
 }
 if (-not $SkipInstall) {
+    # pip prints harmless notices to stderr; don't let that look like a failure.
+    # Judge success by pip's real exit code instead.
+    $ErrorActionPreference = "Continue"
     Write-Progress -Activity $act -Status "Updating the installer..." -PercentComplete 25
-    & $venvPy -m pip install --upgrade pip
-    Write-Progress -Activity $act -Status "Installing components - this takes about a minute, please wait..." -PercentComplete 45
-    Write-Host "Installing components (about a minute). You'll see packages download below:" -ForegroundColor Cyan
+    & $venvPy -m pip install --upgrade pip | Out-Null
+    Write-Progress -Activity $act -Status "Installing components - about a minute, please wait..." -PercentComplete 45
+    Write-Host "Installing components (about a minute). Packages download below:" -ForegroundColor Cyan
     & $venvPy -m pip install -e $root
+    $pipCode = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    if ($pipCode -ne 0) { throw "Could not install the components (error $pipCode). Check your internet connection and try again." }
 }
 Write-Progress -Activity $act -Status "Writing your settings..." -PercentComplete 85
 
@@ -103,3 +109,4 @@ Write-Host "  You can CLOSE this window now and go back to the app:"
 Write-Host "  click 'Step 3 - Start'. (The password also shows there.)"
 Write-Host "=================================================="
 Pause-IfAsked
+exit 0   # deterministic success (don't leak a leftover native exit code)

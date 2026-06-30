@@ -119,3 +119,4 @@ switch ($Mode) {
 }
 
 Pause-IfAsked
+exit 0   # deterministic success (don't leak a leftover native exit code, e.g. from tailscale)
