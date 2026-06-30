@@ -14,6 +14,11 @@ try {
     $scripts = $PSScriptRoot
     $root = Split-Path -Parent $scripts
 
+    # Full activity/error log to a file, for debugging.
+    $script:logDir = Join-Path $root "logs"
+    try { if (-not (Test-Path $script:logDir)) { New-Item -ItemType Directory -Force -Path $script:logDir | Out-Null } } catch { }
+    $script:logFile = Join-Path $script:logDir ("app-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
+
     $script:modernPicker = $false
     try {
         if (-not ("SB.FolderPicker" -as [type])) {
@@ -122,6 +127,21 @@ namespace SB {
         $t = ""; try { $t = ((Get-Content $o -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $e -Raw -ErrorAction SilentlyContinue)).Trim() } catch { }
         Remove-Item $o, $e -ErrorAction SilentlyContinue
         @{ Code = $code; Output = $t }
+    }
+    # Run a CLI tool in the BACKGROUND (so a hang can't freeze the app) behind the
+    # wait bar, with a hard timeout that kills it. Returns Code/Output/TimedOut.
+    function Run-CliBg([string]$exe, [string[]]$a, [string]$workText, [int]$timeoutSec) {
+        $o = [System.IO.Path]::GetTempFileName(); $e = [System.IO.Path]::GetTempFileName()
+        try { $script:bgp = Start-Process $exe -ArgumentList $a -WindowStyle Hidden -PassThru -RedirectStandardOutput $o -RedirectStandardError $e }
+        catch { return @{ Code = -1; Output = $_.Exception.Message; TimedOut = $false } }
+        $script:bgDeadline = (Get-Date).AddSeconds($timeoutSec)
+        Show-Wait $workText { $script:bgp.HasExited -or ((Get-Date) -gt $script:bgDeadline) }
+        $timedOut = $false
+        if (-not $script:bgp.HasExited) { $timedOut = $true; try { Stop-Process -Id $script:bgp.Id -Force } catch { } }
+        Start-Sleep -Milliseconds 200
+        $t = ""; try { $t = ((Get-Content $o -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $e -Raw -ErrorAction SilentlyContinue)).Trim() } catch { }
+        Remove-Item $o, $e -ErrorAction SilentlyContinue
+        @{ Code = $(try { $script:bgp.ExitCode } catch { -1 }); Output = $t; TimedOut = $timedOut }
     }
 
     function Ts-State {
@@ -313,6 +333,15 @@ namespace SB {
     $reader = New-Object System.Xml.XmlNodeReader $xaml
     $win = [System.Windows.Markup.XamlReader]::Load($reader)
     $script:win = $win
+    # Global safety net: log unhandled errors to the file and KEEP the app alive.
+    try {
+        $win.Dispatcher.add_UnhandledException({
+                param($s, $ev)
+                try { Add-Content -Path $script:logFile -Value ("UNHANDLED " + (Get-Date -Format o) + ": " + $ev.Exception.ToString()) -Encoding utf8 } catch { }
+                try { $ev.Handled = $true } catch { }
+            })
+    }
+    catch { }
     $el = { param($n) $win.FindName($n) }
 
     $btnRefresh = & $el "btnRefresh"; $txtServerPill = & $el "txtServerPill"; $pillBorder = & $el "pillBorder"
@@ -333,8 +362,11 @@ namespace SB {
     $script:loginUrl = "https://login.tailscale.com/start"; $script:funnelUrl = $null
 
     function Log([string]$m) {
-        try { $logBox.AppendText((Get-Date -Format "HH:mm:ss") + "  " + $m + "`r`n"); $logBox.ScrollToEnd() } catch { }
+        $line = (Get-Date -Format "HH:mm:ss") + "  " + $m
+        try { $logBox.AppendText($line + "`r`n"); $logBox.ScrollToEnd() } catch { }
+        try { Add-Content -Path $script:logFile -Value $line -Encoding utf8 } catch { }
     }
+    function LogFile([string]$m) { try { Add-Content -Path $script:logFile -Value $m -Encoding utf8 } catch { } }
     function Copy-To([string]$s) { try { [System.Windows.Clipboard]::SetText($s) } catch { } }
 
     function Refresh-UI {
@@ -408,17 +440,23 @@ namespace SB {
     $hlLogin.Add_Click({ $g = Find-TailscaleGui; if ($g) { try { Start-Process $g } catch { } } })
 
     $btnTsFunnel.Add_Click({
-            $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
-            if (-not (Ensure-TailscaleUp $ts)) { Log "Tailscale isn't connected yet. Click Connect first (or open Tailscale from the Start menu), then try again."; Refresh-UI; return }
-            $port = Get-Port
-            Log "Turning on your web link (tailscale funnel $port)..."
-            $r = Run-Cli $ts @("funnel", "--bg", $port)
-            if ($r.Output) { Log ("tailscale: " + ((($r.Output -split "`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join "  |  ")) }
-            if ($r.Output -match "https://login\.tailscale\.com/f/funnel\S+") { $script:funnelUrl = $matches[0]; try { Start-Process $script:funnelUrl } catch { }; $fbFunnel.Visibility = "Visible"; Log "Funnel needs enabling once - opened the page. Click Allow, then Turn on again." }
-            $st = Ts-State
-            if ($st.Dns -and $st.FunnelOn) { Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$($st.Dns)"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $st.Dns; Log "Web link is ON: https://$($st.Dns)" }
-            elseif ($r.Output -match "denied|operator|admin|NoState") { Log "Tailscale wasn't ready. Open 'Tailscale' from the Start menu, make sure it shows Connected, then click Turn on again." }
-            Refresh-UI
+            try {
+                $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
+                Log "Making sure Tailscale is connected..."
+                if (-not (Ensure-TailscaleUp $ts)) { Log "Tailscale isn't connected yet. Click Connect first, then try again."; Refresh-UI; return }
+                $port = Get-Port
+                Log "Turning on your web link (this can take a few seconds)..."
+                $r = Run-CliBg $ts @("funnel", "--bg", $port) "Turning on your web link..." 25
+                LogFile ("FUNNEL exit=$($r.Code) timedOut=$($r.TimedOut)`n" + $r.Output)
+                if ($r.TimedOut) { Log "It took too long and was stopped (logged). Open 'Tailscale' from the Start menu, make sure it's Connected, then try Turn on again." }
+                elseif ($r.Output) { Log ("tailscale: " + ((($r.Output -split "`n") | Where-Object { $_.Trim() } | Select-Object -Last 2) -join "  |  ")) }
+                if ($r.Output -match "https://login\.tailscale\.com/f/funnel\S+") { $script:funnelUrl = $matches[0]; try { Start-Process $script:funnelUrl } catch { }; $fbFunnel.Visibility = "Visible"; Log "Funnel needs enabling once - opened the page. Click Allow, then Turn on again." }
+                $st = Ts-State
+                if ($st.Dns -and $st.FunnelOn) { Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$($st.Dns)"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $st.Dns; Log "Web link is ON: https://$($st.Dns)" }
+                elseif (-not $r.TimedOut -and ($r.Output -match "denied|operator|admin|NoState")) { Log "Tailscale wasn't ready. Open 'Tailscale' from the Start menu, ensure Connected, then Turn on again." }
+                Refresh-UI
+            }
+            catch { Log ("Web link error: " + $_.Exception.Message); LogFile ("WEBLINK EXC: " + $_.Exception.ToString()) }
         })
     $hlFunnel.Add_Click({ if ($script:funnelUrl) { try { Start-Process $script:funnelUrl } catch { } } })
 
