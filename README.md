@@ -55,10 +55,12 @@ never open a terminal or type a command.
      **Install for me** — it installs automatically and the app keeps going.
    - **Step 2 — Choose my notes folder:** pick the folder where your notes live. A
      progress bar shows it working (the first install takes about a minute).
-   - **Step 3 — Set up your web link:** click it once — it installs **Tailscale**
-     (free) and gives you a link so **Claude on your phone** and **claude.ai in a
-     browser** can reach your PC (they can't see an address that only exists on
-     your machine). You sign in to Tailscale once when the browser opens.
+   - **Step 3 — Connect your Second Brain (phone & web):** follow the three little
+     steps in the card — **Install** Tailscale (free), **Sign in** (a browser
+     opens; there's a "click here" fallback if it doesn't), and **Turn on** your
+     web link. Each shows a check once it's done. This gives **Claude on your
+     phone** and **claude.ai in a browser** a link to reach your PC (they can't
+     see an address that only exists on your machine).
    - **Step 4 — Start.** The server runs quietly in the background (no window to
      babysit).
    - **Step 5 — Add to Claude:** the window shows a **link** and **password** with a
