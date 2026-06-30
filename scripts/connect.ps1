@@ -9,8 +9,15 @@
 # so the server trusts it, then starts the tunnel. Run .\run.ps1 in a second
 # window to start the server itself.
 [CmdletBinding()]
-param([ValidateSet('local', 'cloudflare', 'tailscale')][string]$Mode)
+param(
+    [ValidateSet('local', 'cloudflare', 'tailscale')][string]$Mode,
+    [switch]$Pause       # when launched from the app: hold the window, then close cleanly
+)
 $ErrorActionPreference = "Stop"
+
+function Pause-IfAsked { if ($Pause) { Write-Host ""; [void](Read-Host "Press Enter to close this window") } }
+trap { Write-Host ""; Write-Host "There was a problem: $($_.Exception.Message)" -ForegroundColor Red; Pause-IfAsked; exit 1 }
+
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root ".env"
 if (-not (Test-Path $envFile)) { throw "No .env found. Run .\scripts\setup.ps1 first." }
@@ -110,3 +117,5 @@ switch ($Mode) {
         Write-Host "Go back to the app and click Step 4 - Start.  (To turn the link off later: tailscale funnel reset)"
     }
 }
+
+Pause-IfAsked

@@ -45,7 +45,10 @@ try {
     }
     function Info($m, $t = "Second Brain") { [void][System.Windows.Forms.MessageBox]::Show($m, $t) }
     function Run-Window([string]$file, [string[]]$rest, [switch]$Wait) {
-        $a = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File", "`"$file`"") + $rest
+        # No -NoExit: the window closes when the task ends (scripts called with
+        # -Pause hold on a friendly "press Enter to close" so nothing lingers at a
+        # live PowerShell prompt).
+        $a = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$file`"") + $rest
         if ($Wait) { Start-Process powershell -ArgumentList $a -Wait } else { Start-Process powershell -ArgumentList $a }
     }
     function Run-Hidden([string]$file, [string[]]$rest) {
@@ -212,7 +215,7 @@ try {
             $dlg.Description = "Choose your notes folder (your Obsidian vault)"
             if ($dlg.ShowDialog() -ne "OK") { return }
             Info("Setting up. A window opens with a progress bar - let it finish (about a minute). Then come back and do Step 3.")
-            Run-Window (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$($dlg.SelectedPath)`"")
+            Run-Window (Join-Path $scripts "setup.ps1") @("-Force", "-VaultPath", "`"$($dlg.SelectedPath)`"", "-Pause")
         })
 
     $btnWeb.Add_Click({
@@ -234,7 +237,7 @@ try {
             $tsDir = Split-Path -Parent $ts
             if (";$env:Path;" -notlike "*;$tsDir;*") { $env:Path = "$tsDir;$env:Path" }
             Info("Next, a window signs you in to Tailscale (approve it in the browser) and creates your web link. When you see the link, close that window and click Step 4 - Start.")
-            Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale")
+            Run-Window (Join-Path $scripts "connect.ps1") @("-Mode", "tailscale", "-Pause")
         })
 
     $btnStart.Add_Click({

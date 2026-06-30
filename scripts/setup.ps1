@@ -13,9 +13,15 @@
 param(
     [string]$VaultPath,
     [switch]$Force,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$Pause       # when launched from the app: hold the window, then close cleanly
 )
 $ErrorActionPreference = "Stop"
+
+function Pause-IfAsked { if ($Pause) { Write-Host ""; [void](Read-Host "Press Enter to close this window") } }
+# Catch any error, show it plainly, hold so it can be read, then close (no live prompt).
+trap { Write-Host ""; Write-Host "There was a problem: $($_.Exception.Message)" -ForegroundColor Red; Pause-IfAsked; exit 1 }
+
 $root = Split-Path -Parent $PSScriptRoot          # project root (parent of scripts\)
 $envFile = Join-Path $root ".env"
 
@@ -96,3 +102,4 @@ Write-Host ""
 Write-Host "  You can CLOSE this window now and go back to the app:"
 Write-Host "  click 'Step 3 - Start'. (The password also shows there.)"
 Write-Host "=================================================="
+Pause-IfAsked
