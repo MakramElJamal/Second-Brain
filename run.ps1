@@ -33,4 +33,11 @@ if ($env:OAUTH_CLIENTS_PATH) {
 }
 
 Write-Host "Starting second-brain-web-mcp on $($env:VAULT_MCP_HOST):$($env:VAULT_MCP_PORT) ..."
-& (Join-Path $root ".venv\Scripts\second-brain-mcp.exe")
+
+# Capture the server's output to a log file so OAuth / connection errors are
+# visible for debugging (the app otherwise runs it hidden with no console).
+$logDir = Join-Path $root "logs"
+try { New-Item -ItemType Directory -Force -Path $logDir | Out-Null } catch { }
+$serverLog = Join-Path $logDir ("server-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
+"=== server start $(Get-Date -Format o) | public=$($env:VAULT_MCP_PUBLIC_URL) ===" | Out-File -FilePath $serverLog -Encoding utf8
+& (Join-Path $root ".venv\Scripts\second-brain-mcp.exe") *>> $serverLog

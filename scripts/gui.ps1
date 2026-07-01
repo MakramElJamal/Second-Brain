@@ -19,6 +19,24 @@ try {
     try { if (-not (Test-Path $script:logDir)) { New-Item -ItemType Directory -Force -Path $script:logDir | Out-Null } } catch { }
     $script:logFile = Join-Path $script:logDir ("app-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
 
+    # --- auto-update on launch: pull the latest from the repo (git clones only).
+    # Toggle off with the checkbox at the bottom (creates .autoupdate-off).
+    if (-not (Test-Path (Join-Path $root ".autoupdate-off"))) {
+        try {
+            if ((Test-Path (Join-Path $root ".git")) -and (Get-Command git -ErrorAction SilentlyContinue)) {
+                $before = (& git -C $root rev-parse HEAD 2>$null)
+                & git -C $root pull --quiet 2>$null
+                $after = (& git -C $root rev-parse HEAD 2>$null)
+                if ($before -and $after -and ($before -ne $after)) {
+                    Add-Content -Path $script:logFile -Value "auto-update: $before -> $after; relaunching" -Encoding utf8
+                    Start-Process (Join-Path $root "Install Second Brain.cmd")
+                    return
+                }
+            }
+        }
+        catch { }
+    }
+
     $script:modernPicker = $false
     try {
         if (-not ("SB.FolderPicker" -as [type])) {
@@ -290,13 +308,16 @@ namespace SB {
         <TextBlock Style="{StaticResource H}" Text="4.  Server"/>
         <DockPanel><TextBlock x:Name="txtSrv" Text="Stopped" VerticalAlignment="Center"/>
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
-            <Button x:Name="btnStart" Content="Start" Margin="0,0,8,0"/><Button x:Name="btnStop" Content="Stop" Style="{StaticResource Ghost}"/></StackPanel></DockPanel>
+            <Button x:Name="btnStart" Content="Start" Margin="0,0,8,0"/><Button x:Name="btnRestart" Content="Restart" Style="{StaticResource Ghost}" Margin="0,0,8,0"/><Button x:Name="btnStop" Content="Stop" Style="{StaticResource Ghost}"/></StackPanel></DockPanel>
       </StackPanel></Border>
 
       <Border Style="{StaticResource Card}"><StackPanel>
         <DockPanel Margin="0,0,0,10">
           <TextBlock Text="5.  Add connector (to Claude / ChatGPT)" FontSize="14" FontWeight="SemiBold" Foreground="#111827" VerticalAlignment="Center"/>
-          <Button x:Name="btnConnInfo" Content="How?" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right" Padding="10,3"/>
+          <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+            <Button x:Name="btnFixConn" Content="Fix connection" Style="{StaticResource Ghost}" Padding="10,3" Margin="0,0,6,0"/>
+            <Button x:Name="btnConnInfo" Content="How?" Style="{StaticResource Ghost}" Padding="10,3"/>
+          </StackPanel>
         </DockPanel>
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -322,9 +343,13 @@ namespace SB {
         <TextBox x:Name="logBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="92" FontFamily="Consolas" FontSize="11" Background="#F9FAFB" BorderBrush="#E5E7EB"/>
       </StackPanel></Border>
 
-      <DockPanel Margin="2,2,2,0">
-        <CheckBox x:Name="chkAuto" Content="Start automatically when I turn on my PC" VerticalAlignment="Center"/>
-        <Button x:Name="btnUninstall" Content="Uninstall" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/></DockPanel>
+      <StackPanel Margin="2,2,2,0">
+        <DockPanel>
+          <CheckBox x:Name="chkAuto" Content="Start automatically when I turn on my PC" VerticalAlignment="Center"/>
+          <Button x:Name="btnUninstall" Content="Uninstall" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
+        </DockPanel>
+        <CheckBox x:Name="chkUpdate" Content="Automatically update on launch" Margin="0,10,0,0"/>
+      </StackPanel>
     </StackPanel>
   </ScrollViewer>
 </Window>
@@ -354,8 +379,8 @@ namespace SB {
     $txtTsInst = & $el "txtTsInst"; $btnTsInst = & $el "btnTsInst"
     $txtTsLogin = & $el "txtTsLogin"; $btnTsLogin = & $el "btnTsLogin"; $fbLogin = & $el "fbLogin"; $hlLogin = & $el "hlLogin"
     $txtTsFunnel = & $el "txtTsFunnel"; $btnTsFunnel = & $el "btnTsFunnel"; $fbFunnel = & $el "fbFunnel"; $hlFunnel = & $el "hlFunnel"
-    $txtSrv = & $el "txtSrv"; $btnStart = & $el "btnStart"; $btnStop = & $el "btnStop"
-    $btnConnInfo = & $el "btnConnInfo"; $hlUrl = & $el "hlUrl"; $runUrl = & $el "runUrl"
+    $txtSrv = & $el "txtSrv"; $btnStart = & $el "btnStart"; $btnRestart = & $el "btnRestart"; $btnStop = & $el "btnStop"
+    $btnConnInfo = & $el "btnConnInfo"; $btnFixConn = & $el "btnFixConn"; $chkUpdate = & $el "chkUpdate"; $hlUrl = & $el "hlUrl"; $runUrl = & $el "runUrl"
     $btnCopyLink = & $el "btnCopyLink"; $txtUser = & $el "txtUser"; $btnCopyUser = & $el "btnCopyUser"; $txtPass = & $el "txtPass"; $btnCopyPass = & $el "btnCopyPass"
     $logBox = & $el "logBox"; $chkAuto = & $el "chkAuto"; $btnUninstall = & $el "btnUninstall"
 
@@ -368,6 +393,12 @@ namespace SB {
     }
     function LogFile([string]$m) { try { Add-Content -Path $script:logFile -Value $m -Encoding utf8 } catch { } }
     function Copy-To([string]$s) { try { [System.Windows.Clipboard]::SetText($s) } catch { } }
+    function Restart-Server {
+        if (Test-Running) { [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Restarting the server..." $null); Start-Sleep -Milliseconds 600 }
+        Run-Hidden (Join-Path $root "run.ps1") @()
+        $script:srvUrl = "http://127.0.0.1:$(Get-Port)"; $script:srvReady = $false; $script:srvDeadline = (Get-Date).AddSeconds(20)
+        Show-Wait "Restarting the server..." { if (Test-Health $script:srvUrl) { $script:srvReady = $true }; $script:srvReady -or ((Get-Date) -gt $script:srvDeadline) }
+    }
 
     function Refresh-UI {
         $py = Have-Python; $conf = Test-Configured; $inst = Test-Installed; $run = Test-Running
@@ -452,6 +483,7 @@ namespace SB {
                 LogFile ("WEBLINK (timedOut=$($r.TimedOut)):`n" + $r.Output)
                 if ($r.Output -match "TS_FUNNEL_ON https://(\S+)") {
                     $dns = $matches[1]; Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$dns"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $dns; Log "Web link is ON: https://$dns"
+                    if (Test-Running) { Log "Restarting the server so it uses the web link..."; Restart-Server }
                 }
                 elseif ($r.Output -match "TS_FUNNEL_NEEDS_ENABLE (\S+)") {
                     $u = $matches[1]; $script:funnelUrl = $u; try { Start-Process $u } catch { }; $fbFunnel.Visibility = "Visible"
@@ -476,6 +508,20 @@ namespace SB {
             if ($script:srvReady) { Log "Server is running and ready." } else { Log "Server isn't responding yet. Wait a few seconds and click Refresh, or check step 2 finished." }
         })
     $btnStop.Add_Click({ Log "Stopping the server..."; [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Stopping the server..." $null); Refresh-UI; Log "Server stopped." })
+    $btnRestart.Add_Click({ Log "Restarting the server..."; Restart-Server; Refresh-UI; if ($script:srvReady) { Log "Server restarted and ready." } else { Log "Restarted, but not responding yet - wait a few seconds and Refresh." } })
+
+    $btnFixConn.Add_Click({
+            if (-not (Confirm("This clears the saved connector logins and restarts the server, so you can add the connector fresh (fixes 'token exchange failed'). Your notes are NOT affected. Continue?"))) { return }
+            try {
+                $oc = Get-EnvVal "OAUTH_CLIENTS_PATH"; if (-not $oc) { $oc = ".secrets\oauth_clients.json" }
+                $ocPath = if ([System.IO.Path]::IsPathRooted($oc)) { $oc } else { Join-Path $root $oc }
+                if (Test-Path $ocPath) { Remove-Item $ocPath -Force -ErrorAction SilentlyContinue; Log "Cleared saved connector logins ($ocPath)." } else { Log "No saved connector logins to clear." }
+                Restart-Server
+                Log "Reset done. In Claude/ChatGPT: REMOVE the old connector, then add it again with the Link."
+                Info("Reset complete. Now, in Claude/ChatGPT: remove the old connector, then add it again with the Link. A fresh sign-in window will pop up.")
+            }
+            catch { Log ("Fix error: " + $_.Exception.Message); LogFile ("FIX EXC: " + $_.Exception.ToString()) }
+        })
 
     $btnConnInfo.Add_Click({ Show-ConnectorHelp })
 
@@ -494,6 +540,16 @@ namespace SB {
     $btnCopyPass.Add_Click({ Copy-To (Get-EnvVal "VAULT_OAUTH_PASSWORD"); Log "Copied the password." })
 
     $btnUninstall.Add_Click({ if (Confirm("Remove the install? Your notes are NOT touched.")) { Log "Uninstalling..."; [void](Run-Task (Join-Path $scripts "uninstall.ps1") @("-Yes") "Removing the install..." $null); Refresh-UI; Log "Uninstalled." } })
+
+    $chkUpdate.IsChecked = (-not (Test-Path (Join-Path $root ".autoupdate-off")))
+    $chkUpdate.Add_Click({
+            try {
+                $off = Join-Path $root ".autoupdate-off"
+                if ($chkUpdate.IsChecked) { if (Test-Path $off) { Remove-Item $off -Force }; Log "Auto-update: on (pulls the latest each launch)" }
+                else { New-Item -ItemType File -Force -Path $off | Out-Null; Log "Auto-update: off" }
+            }
+            catch { }
+        })
 
     $script:autoBusy = $true
     try { $chkAuto.IsChecked = ((& (Join-Path $scripts "autostart.ps1") -Action status) -eq "enabled") } catch { }

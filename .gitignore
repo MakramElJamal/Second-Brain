@@ -14,3 +14,4 @@ uv.lock
 .pytest_cache/
 *.log
 logs/
+.autoupdate-off
