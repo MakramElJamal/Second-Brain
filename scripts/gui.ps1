@@ -394,7 +394,13 @@ namespace SB {
     function LogFile([string]$m) { try { Add-Content -Path $script:logFile -Value $m -Encoding utf8 } catch { } }
     function Copy-To([string]$s) { try { [System.Windows.Clipboard]::SetText($s) } catch { } }
     function Restart-Server {
-        if (Test-Running) { [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Restarting the server..." $null); Start-Sleep -Milliseconds 600 }
+        if (Test-Running) {
+            [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Restarting the server..." $null)
+            # Wait for the TCP port to actually release before rebinding (it can lag
+            # a couple of seconds; rebinding too soon makes the new server crash).
+            $freeBy = (Get-Date).AddSeconds(8)
+            while ((Test-Running) -and ((Get-Date) -lt $freeBy)) { Start-Sleep -Milliseconds 300 }
+        }
         Run-Hidden (Join-Path $root "run.ps1") @()
         $script:srvUrl = "http://127.0.0.1:$(Get-Port)"; $script:srvReady = $false; $script:srvDeadline = (Get-Date).AddSeconds(20)
         Show-Wait "Restarting the server..." { if (Test-Health $script:srvUrl) { $script:srvReady = $true }; $script:srvReady -or ((Get-Date) -gt $script:srvDeadline) }

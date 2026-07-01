@@ -40,4 +40,8 @@ $logDir = Join-Path $root "logs"
 try { New-Item -ItemType Directory -Force -Path $logDir | Out-Null } catch { }
 $serverLog = Join-Path $logDir ("server-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
 "=== server start $(Get-Date -Format o) | public=$($env:VAULT_MCP_PUBLIC_URL) ===" | Out-File -FilePath $serverLog -Encoding utf8
-& (Join-Path $root ".venv\Scripts\second-brain-mcp.exe") *>> $serverLog
+# The server logs to stderr; under EAP=Stop, capturing stderr turns the first log
+# line into a terminating error and KILLS the server. Switch to Continue so it
+# keeps running while we tee its output to the log file.
+$ErrorActionPreference = "Continue"
+& (Join-Path $root ".venv\Scripts\second-brain-mcp.exe") 2>&1 | Tee-Object -FilePath $serverLog -Append
