@@ -29,10 +29,31 @@ $d = Dns
 if ($Action -eq "connect") { Write-Output "TS_CONNECTED $d"; exit 0 }
 
 # weblink: turn on Funnel for the port.
+# IMPORTANT: `tailscale funnel` HANGS waiting for approval if Funnel isn't enabled
+# on the tailnet yet (it prints a login.tailscale.com/f/funnel URL first). So we
+# run it in the background and watch its output incrementally - the moment we see
+# the approval URL (or success) we act, instead of blocking on it.
 Write-Output "Turning on Funnel for port $Port ..."
-$out = (& $ts funnel --bg $Port 2>&1 | Out-String)
-Write-Output $out
-Start-Sleep -Milliseconds 600
+$fo = [System.IO.Path]::GetTempFileName(); $fe = [System.IO.Path]::GetTempFileName()
+$fp = Start-Process $ts -ArgumentList "funnel", "--bg", "$Port" -WindowStyle Hidden -PassThru -RedirectStandardOutput $fo -RedirectStandardError $fe
+$enableUrl = $null; $started = $false
+$deadline = (Get-Date).AddSeconds(18)
+while ($true) {
+    Start-Sleep -Milliseconds 400
+    $c = ((Get-Content $fo, $fe -Raw -ErrorAction SilentlyContinue) -join "`n")
+    if ($c -match "https://login\.tailscale\.com/f/funnel\S+") { $enableUrl = $matches[0]; break }
+    if ($c -match "Funnel started|Available on the internet") { $started = $true; break }
+    if ($fp.HasExited -or ((Get-Date) -gt $deadline)) { break }
+}
+$full = ((Get-Content $fo, $fe -Raw -ErrorAction SilentlyContinue) -join "`n")
+Write-Output $full
+# Stop a still-hanging funnel command (waiting for approval); the funnel itself,
+# once enabled, is served by the tailscaled service and persists.
+if (-not $fp.HasExited) { try { Stop-Process -Id $fp.Id -Force } catch { } }
+Remove-Item $fo, $fe -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
 $fs = (& $ts funnel status 2>&1 | Out-String)
-if ($fs -match "https://") { Write-Output "TS_FUNNEL_ON https://$d" } else { Write-Output "TS_FUNNEL_OFF" }
+if ($fs -match "https://") { Write-Output "TS_FUNNEL_ON https://$d" }
+elseif ($enableUrl) { Write-Output "TS_FUNNEL_NEEDS_ENABLE $enableUrl" }
+else { Write-Output "TS_FUNNEL_OFF" }
 exit 0

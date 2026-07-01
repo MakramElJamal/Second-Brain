@@ -450,12 +450,16 @@ namespace SB {
                 Log "Turning on your web link (connecting Tailscale, then Funnel)..."
                 $r = Run-CliBg "powershell" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$(Join-Path $scripts 'tailscale.ps1')`"", "-Action", "weblink", "-Port", $port) "Turning on your web link..." 55
                 LogFile ("WEBLINK (timedOut=$($r.TimedOut)):`n" + $r.Output)
-                if ($r.TimedOut) { Log "It took too long and was stopped (logged). Open 'Tailscale' from the Start menu, ensure Connected, then Turn on again." }
-                elseif ($r.Output -match "TS_FUNNEL_ON https://(\S+)") {
+                if ($r.Output -match "TS_FUNNEL_ON https://(\S+)") {
                     $dns = $matches[1]; Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$dns"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $dns; Log "Web link is ON: https://$dns"
                 }
+                elseif ($r.Output -match "TS_FUNNEL_NEEDS_ENABLE (\S+)") {
+                    $u = $matches[1]; $script:funnelUrl = $u; try { Start-Process $u } catch { }; $fbFunnel.Visibility = "Visible"
+                    Log "One-time step: approve Funnel on the page that just opened (click 'Enable'), then click Turn on again."
+                    Info("Almost there! A Tailscale page opened - click 'Enable' / approve Funnel there (one time only), then come back and click 'Turn on' again.")
+                }
                 elseif ($r.Output -match "TS_NOT_CONNECTED") { Log "Tailscale isn't connected. Open 'Tailscale' from the Start menu, make sure it shows Connected, then Turn on again." }
-                elseif ($r.Output -match "https://login\.tailscale\.com/f/funnel\S+") { $script:funnelUrl = $matches[0]; try { Start-Process $script:funnelUrl } catch { }; $fbFunnel.Visibility = "Visible"; Log "Funnel needs approving once - opened the page. Approve it there, then click Turn on again." }
+                elseif ($r.TimedOut) { Log "It took too long and was stopped (logged). Open 'Tailscale' from the Start menu, ensure Connected, then Turn on again." }
                 else { Log "Couldn't turn on the web link (details saved to the log). Open Tailscale, ensure it's Connected, then try again." }
                 Refresh-UI
             }
