@@ -431,29 +431,32 @@ namespace SB {
         })
 
     $btnTsLogin.Add_Click({
-            $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
-            Log "Connecting to Tailscale (opening the app to wake it up)..."
-            $ok = Ensure-TailscaleUp $ts
-            if ($ok) { Log "Tailscale is connected." } else { Log "Tailscale didn't connect in time. Open 'Tailscale' from your Start menu, make sure it shows Connected, then click Refresh."; $fbLogin.Visibility = "Visible" }
-            Refresh-UI
+            try {
+                Log "Connecting to Tailscale (opening the app and waiting for it)..."
+                $r = Run-CliBg "powershell" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$(Join-Path $scripts 'tailscale.ps1')`"", "-Action", "connect") "Connecting to Tailscale..." 40
+                LogFile ("CONNECT (timedOut=$($r.TimedOut)):`n" + $r.Output)
+                if ($r.Output -match "TS_CONNECTED") { Log "Tailscale is connected." }
+                elseif ($r.Output -match "TS_NOT_FOUND") { Log "Tailscale isn't installed - use the Install button first." }
+                else { Log "Tailscale didn't connect. Open 'Tailscale' from the Start menu, make sure it shows Connected (green), then click Refresh."; $fbLogin.Visibility = "Visible" }
+                Refresh-UI
+            }
+            catch { Log ("Connect error: " + $_.Exception.Message); LogFile ("CONNECT EXC: " + $_.Exception.ToString()) }
         })
     $hlLogin.Add_Click({ $g = Find-TailscaleGui; if ($g) { try { Start-Process $g } catch { } } })
 
     $btnTsFunnel.Add_Click({
             try {
-                $ts = Find-Tailscale; if (-not $ts) { Log "Tailscale not found."; return }
-                Log "Making sure Tailscale is connected..."
-                if (-not (Ensure-TailscaleUp $ts)) { Log "Tailscale isn't connected yet. Click Connect first, then try again."; Refresh-UI; return }
                 $port = Get-Port
-                Log "Turning on your web link (this can take a few seconds)..."
-                $r = Run-CliBg $ts @("funnel", "--bg", $port) "Turning on your web link..." 25
-                LogFile ("FUNNEL exit=$($r.Code) timedOut=$($r.TimedOut)`n" + $r.Output)
-                if ($r.TimedOut) { Log "It took too long and was stopped (logged). Open 'Tailscale' from the Start menu, make sure it's Connected, then try Turn on again." }
-                elseif ($r.Output) { Log ("tailscale: " + ((($r.Output -split "`n") | Where-Object { $_.Trim() } | Select-Object -Last 2) -join "  |  ")) }
-                if ($r.Output -match "https://login\.tailscale\.com/f/funnel\S+") { $script:funnelUrl = $matches[0]; try { Start-Process $script:funnelUrl } catch { }; $fbFunnel.Visibility = "Visible"; Log "Funnel needs enabling once - opened the page. Click Allow, then Turn on again." }
-                $st = Ts-State
-                if ($st.Dns -and $st.FunnelOn) { Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$($st.Dns)"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $st.Dns; Log "Web link is ON: https://$($st.Dns)" }
-                elseif (-not $r.TimedOut -and ($r.Output -match "denied|operator|admin|NoState")) { Log "Tailscale wasn't ready. Open 'Tailscale' from the Start menu, ensure Connected, then Turn on again." }
+                Log "Turning on your web link (connecting Tailscale, then Funnel)..."
+                $r = Run-CliBg "powershell" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$(Join-Path $scripts 'tailscale.ps1')`"", "-Action", "weblink", "-Port", $port) "Turning on your web link..." 55
+                LogFile ("WEBLINK (timedOut=$($r.TimedOut)):`n" + $r.Output)
+                if ($r.TimedOut) { Log "It took too long and was stopped (logged). Open 'Tailscale' from the Start menu, ensure Connected, then Turn on again." }
+                elseif ($r.Output -match "TS_FUNNEL_ON https://(\S+)") {
+                    $dns = $matches[1]; Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$dns"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $dns; Log "Web link is ON: https://$dns"
+                }
+                elseif ($r.Output -match "TS_NOT_CONNECTED") { Log "Tailscale isn't connected. Open 'Tailscale' from the Start menu, make sure it shows Connected, then Turn on again." }
+                elseif ($r.Output -match "https://login\.tailscale\.com/f/funnel\S+") { $script:funnelUrl = $matches[0]; try { Start-Process $script:funnelUrl } catch { }; $fbFunnel.Visibility = "Visible"; Log "Funnel needs approving once - opened the page. Approve it there, then click Turn on again." }
+                else { Log "Couldn't turn on the web link (details saved to the log). Open Tailscale, ensure it's Connected, then try again." }
                 Refresh-UI
             }
             catch { Log ("Web link error: " + $_.Exception.Message); LogFile ("WEBLINK EXC: " + $_.Exception.ToString()) }
