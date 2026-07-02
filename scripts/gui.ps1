@@ -483,7 +483,7 @@ namespace SB {
                 }
                 Log "Checking for updates..."
                 $before = (Invoke-CliCapture "git" "-C `"$root`" rev-parse HEAD" 10000)
-                $r = Run-CliBg "git" @("-C", "`"$root`"", "pull", "--ff-only") "Checking for updates..." 90
+                $r = Run-CliBg "git" @("-C", "`"$root`"", "pull", "--ff-only", "origin", "main") "Checking for updates..." 90
                 LogFile ("UPDATE (timedOut=$($r.TimedOut)):`n" + $r.Output)
                 $after = (Invoke-CliCapture "git" "-C `"$root`" rev-parse HEAD" 10000)
                 if ($r.Output -match "Already up to date") { Log "You're on the latest version."; Info("You're already on the latest version.") }
