@@ -175,7 +175,27 @@ namespace SB {
     function Show-ConnectorHelp {
         $h = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Add the connector" Height="540" Width="470" WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="White" FontFamily="Segoe UI">
+        Title="Add the connector" Height="560" Width="470" WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="White" FontFamily="Segoe UI">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#4F46E5"/><Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="18,8"/>
+      <Setter Property="Cursor" Value="Hand"/><Setter Property="FontSize" Value="13"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template"><Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="7">
+            <Border x:Name="ov" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ov" Property="Background" Value="#14000000"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="ov" Property="Background" Value="#30000000"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+  </Window.Resources>
   <ScrollViewer Padding="22" VerticalScrollBarVisibility="Auto"><StackPanel>
     <TextBlock Text="Add the connector" FontSize="19" FontWeight="Bold" Foreground="#111827" Margin="0,0,0,10"/>
     <TextBlock TextWrapping="Wrap" Foreground="#374151" Margin="0,0,0,16">Use the Link from the app to connect your Second Brain to Claude or ChatGPT.</TextBlock>
@@ -188,7 +208,7 @@ namespace SB {
       <TextBlock TextWrapping="Wrap" Foreground="#7F1D1D">Do NOT type your username or password into the Claude / ChatGPT form. After you add the Link, a separate sign-in window pops up - enter the username (obsidian) and the password THERE.</TextBlock>
     </StackPanel></Border>
     <TextBlock TextWrapping="Wrap" Foreground="#6B7280" FontSize="12">After adding, it can take a minute or two for the tools to appear (the web link is still warming up). If it says "no tools available", wait a moment and refresh / re-open the connector.</TextBlock>
-    <Button x:Name="btnOk" Content="Got it" HorizontalAlignment="Right" Margin="0,18,0,0"/>
+    <Button x:Name="btnOk" Content="Got it" HorizontalAlignment="Right" MinWidth="110" Margin="0,18,0,4"/>
   </StackPanel></ScrollViewer>
 </Window>
 '@
