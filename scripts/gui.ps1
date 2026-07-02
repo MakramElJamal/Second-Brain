@@ -326,30 +326,29 @@ namespace SB {
         </StackPanel></Border>
 
         <Border Grid.Row="1" Style="{StaticResource Card}"><StackPanel>
-          <DockPanel Margin="0,0,0,12">
+          <DockPanel Margin="0,0,0,14">
             <TextBlock Text="5.  Add connector (Claude / ChatGPT)" FontSize="14" FontWeight="SemiBold" Foreground="#111827" VerticalAlignment="Center"/>
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
-              <Button x:Name="btnFixConn" Content="Fix connection" Style="{StaticResource Ghost}" Padding="10,4" Margin="0,0,6,0"/>
-              <Button x:Name="btnConnInfo" Content="How?" Style="{StaticResource Ghost}" Padding="10,4"/>
-            </StackPanel>
+            <Button x:Name="btnConnInfo" Content="How do I add it?" DockPanel.Dock="Right" HorizontalAlignment="Right" Padding="13,5"/>
           </DockPanel>
           <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="32"/><RowDefinition Height="32"/></Grid.RowDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="84"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="34"/><RowDefinition Height="34"/></Grid.RowDefinitions>
             <TextBlock Grid.Row="0" Grid.Column="0" Text="Link" VerticalAlignment="Center" Foreground="#6B7280"/>
-            <TextBlock Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"><Hyperlink x:Name="hlUrl"><Run x:Name="runUrl" Text="(do step 3)"/></Hyperlink></TextBlock>
-            <Button Grid.Row="0" Grid.Column="2" x:Name="btnCopyLink" Content="Copy" Style="{StaticResource Ghost}" Margin="8,3"/>
+            <TextBlock Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0" TextTrimming="CharacterEllipsis"><Hyperlink x:Name="hlUrl"><Run x:Name="runUrl" Text="(do step 3)"/></Hyperlink></TextBlock>
+            <Button Grid.Row="0" Grid.Column="2" x:Name="btnCopyLink" Content="Copy" Style="{StaticResource Ghost}" Margin="0,4" MinWidth="72"/>
             <TextBlock Grid.Row="1" Grid.Column="0" Text="Username" VerticalAlignment="Center" Foreground="#6B7280"/>
             <TextBlock Grid.Row="1" Grid.Column="1" x:Name="txtUser" Text="obsidian" VerticalAlignment="Center" FontFamily="Consolas"/>
-            <Button Grid.Row="1" Grid.Column="2" x:Name="btnCopyUser" Content="Copy" Style="{StaticResource Ghost}" Margin="8,3"/>
+            <Button Grid.Row="1" Grid.Column="2" x:Name="btnCopyUser" Content="Copy" Style="{StaticResource Ghost}" Margin="0,4" MinWidth="72"/>
             <TextBlock Grid.Row="2" Grid.Column="0" Text="Password" VerticalAlignment="Center" Foreground="#6B7280"/>
             <TextBlock Grid.Row="2" Grid.Column="1" x:Name="txtPass" Text="-" VerticalAlignment="Center" FontFamily="Consolas"/>
-            <Button Grid.Row="2" Grid.Column="2" x:Name="btnCopyPass" Content="Copy" Style="{StaticResource Ghost}" Margin="8,3"/>
+            <Button Grid.Row="2" Grid.Column="2" x:Name="btnCopyPass" Content="Copy" Style="{StaticResource Ghost}" Margin="0,4" MinWidth="72"/>
           </Grid>
-          <DockPanel Margin="0,12,0,0">
-            <TextBlock x:Name="txtReach" Text="Start the server, then Test before adding the connector." VerticalAlignment="Center" FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"/>
-            <Button x:Name="btnTest" Content="Test connection" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8,0,0,0"/>
-          </DockPanel>
+          <Separator Margin="0,12,0,10" Background="#E5E7EB"/>
+          <TextBlock x:Name="txtReach" Text="Start the server, then Test before adding the connector." FontSize="12" Foreground="#6B7280" TextWrapping="Wrap" Margin="0,0,0,10"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="btnTest" Content="Test connection" Style="{StaticResource Ghost}" MinWidth="130" Margin="0,0,8,0"/>
+            <Button x:Name="btnFixConn" Content="Fix connection" Style="{StaticResource Ghost}" MinWidth="120"/>
+          </StackPanel>
         </StackPanel></Border>
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0">
