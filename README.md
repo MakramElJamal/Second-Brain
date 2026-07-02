@@ -71,6 +71,9 @@ never open a terminal or type a command.
 **Always on?** Tick **"Start automatically when I turn on my PC"** in the window
 and the server starts by itself every time you log in.
 
+**Updating:** click **Update** at the top of the window — it fetches the latest
+version and restarts the app for you.
+
 To turn it off or remove it later, open the same window and click **Stop** or
 **Uninstall** (your notes are never touched).
 

@@ -53,7 +53,9 @@ if (-not $fp.HasExited) { try { Stop-Process -Id $fp.Id -Force } catch { } }
 Remove-Item $fo, $fe -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 $fs = (& $ts funnel status 2>&1 | Out-String)
-if ($fs -match "https://") { Write-Output "TS_FUNNEL_ON https://$d" }
+if (-not $d) { $d = Dns }   # re-read; DNS can lag right after the backend wakes
+if (($fs -match "https://") -and $d) { Write-Output "TS_FUNNEL_ON https://$d" }
 elseif ($enableUrl) { Write-Output "TS_FUNNEL_NEEDS_ENABLE $enableUrl" }
+elseif ($fs -match "https://") { Write-Output "Funnel is on but the device name isn't ready yet - try Turn on again in a few seconds."; Write-Output "TS_FUNNEL_OFF" }
 else { Write-Output "TS_FUNNEL_OFF" }
 exit 0
