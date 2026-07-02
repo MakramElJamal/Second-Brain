@@ -9,7 +9,7 @@ Jim Prosser, used under the MIT License.
 
 The entire secure server substrate — Streamable HTTP transport, OAuth 2.0 +
 PKCE login gate, bearer authentication, path-traversal/atomic-write safety,
-audit logging, rate limiting, DNS-rebinding protection, and the extension seam —
+audit logging, DNS-rebinding protection, and the extension seam —
 comes from the upstream project and remains under its copyright.
 
 ## What this fork adds

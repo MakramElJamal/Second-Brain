@@ -255,7 +255,7 @@ want to **collaborate, review, or just reach out**, find me on LinkedIn:
 This project stands on [`obsidian-web-mcp`](https://github.com/jimprosser/obsidian-web-mcp)
 by **Jim Prosser** (MIT). The entire hardened server substrate — the Streamable
 HTTP transport, OAuth 2.0 + PKCE login gate, bearer auth, path-traversal / atomic-
-write safety, audit logging, rate limiting, and the extension seam this project
+write safety, audit logging, and the extension seam this project
 plugs into — is his work, used unmodified under `src/obsidian_vault_mcp/`. Huge
 thanks; please check out and support the upstream project. See [`NOTICE.md`](NOTICE.md).
 

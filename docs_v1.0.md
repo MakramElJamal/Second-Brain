@@ -192,7 +192,7 @@ Inherited from the hardened upstream core, plus our additions:
   rejected; **atomic writes** (temp + rename, no-clobber); soft-delete to
   `.trash` (and `vault_delete` isn't even exposed).
 - **Audit log** of mutations with a SHA-256 hash of the token (never the raw
-  token); **per-token rate limiting**; secrets file ACL-restricted on Windows.
+  token); secrets file ACL-restricted on Windows.
 - **Our layer:** curated tool surface, tag governance, archive-don't-delete.
 - **Operational note:** Cloudflare's "Block AI Scrapers and Crawlers" must be
   **off** for the connector host, or it blocks the LLMs' tool calls.

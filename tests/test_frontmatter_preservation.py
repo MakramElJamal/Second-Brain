@@ -77,12 +77,15 @@ def test_merge_keeps_keys_when_value_contains_triple_dash(vault_dir):
 def test_merge_keeps_bom_prefixed_existing_frontmatter(vault_dir):
     """A BOM-prefixed existing file must not have its frontmatter dropped on merge."""
     path = "fmt.md"
-    (config.VAULT_PATH / path).write_text("﻿---\ntitle: kept\n---\nbody\n")
+    # Explicit UTF-8: Windows' default cp1252 cannot encode the BOM character,
+    # which made this test fail with UnicodeEncodeError before touching the code
+    # under test.
+    (config.VAULT_PATH / path).write_text("﻿---\ntitle: kept\n---\nbody\n", encoding="utf-8")
 
     vault_write(path, "---\nstatus: draft\n---\nbody\n",
                 create_dirs=True, merge_frontmatter=True)
 
-    result = (config.VAULT_PATH / path).read_text()
+    result = (config.VAULT_PATH / path).read_text(encoding="utf-8")
     assert "title: kept" in result    # existing frontmatter survived (not dropped)
     assert "status: draft" in result  # new key merged
 

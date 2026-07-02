@@ -167,7 +167,9 @@ EXCLUDED_DIRS = {".obsidian", ".trash", ".git", ".DS_Store"}
 # Frontmatter index refresh interval (seconds)
 FRONTMATTER_INDEX_DEBOUNCE = 5.0
 
-# Rate limiting (requests per minute) -- track in-memory, enforce per-token
+# Rate limiting (requests per minute). NOTE: declared but NOT yet enforced
+# anywhere -- do not document rate limiting as a delivered control until a
+# limiter actually consumes these.
 RATE_LIMIT_READ = 100
 RATE_LIMIT_WRITE = 30
 

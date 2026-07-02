@@ -66,7 +66,17 @@ if (-not $SkipInstall) {
     & $venvPy -m pip install --upgrade pip | Out-Null
     Write-Progress -Activity $act -Status "Installing components - about a minute, please wait..." -PercentComplete 45
     Write-Host "Installing components (about a minute). Packages download below:" -ForegroundColor Cyan
-    & $venvPy -m pip install -e $root
+    # Install the EXACT dependency versions this project was tested with
+    # (requirements.lock), then the project itself without re-resolving deps.
+    # Falls back to a plain editable install if the lockfile is missing.
+    $lock = Join-Path $root "requirements.lock"
+    if (Test-Path $lock) {
+        & $venvPy -m pip install -r $lock
+        & $venvPy -m pip install -e $root --no-deps
+    }
+    else {
+        & $venvPy -m pip install -e $root
+    }
     $ErrorActionPreference = "Stop"
 }
 

@@ -507,6 +507,7 @@ class SecondBrainExtension(Extension):
                     writing.apply_house_style(
                         chat.build_continuation(summary, decisions, open_questions, key_points)
                     ),
+                    operation="archive_chat",
                 )
                 ext._refresh(rel)
                 return ChatArchiveResult(created=False, status="continued", id=rel,

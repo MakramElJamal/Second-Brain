@@ -7,6 +7,7 @@ unauthenticated attack from the bug reports must no longer yield a token.
 
 import base64
 import hashlib
+import sys
 
 import pytest
 from starlette.applications import Starlette
@@ -298,6 +299,12 @@ def test_registration_persists_across_restart(client):
     assert oauth._redirect_uri_ok(client_id, redirect) is True
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX file modes are advisory on NTFS (os.fchmod is a no-op); the "
+    "real Windows protection is the owner-only ACL that run.ps1/setup.ps1 "
+    "set on the .secrets directory via icacls.",
+)
 def test_registry_file_is_owner_only(client):
     """The persisted registry holds per-client secrets; it must be 0600."""
     _register(client)

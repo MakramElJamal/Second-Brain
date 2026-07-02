@@ -33,7 +33,7 @@ files never leave your machine; the model receives only the slices it requests.
 - **Filesystem** — path-traversal, symlink, null-byte, and dotfile access are
   rejected before any file operation; writes are atomic; deletes are soft (to
   `.trash`) and require confirmation; size and batch caps apply.
-- **Abuse** — per-token rate limiting; append-only audit log records mutations
+- **Abuse** — append-only audit log records mutations
   with a SHA-256 hash of the token (never the raw token).
 
 **NOT fully defended — operator and user responsibilities:**
