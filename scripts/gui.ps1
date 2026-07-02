@@ -620,12 +620,53 @@ namespace SB {
     $btnConnInfo.Add_Click({ Show-ConnectorHelp })
 
     $btnTest.Add_Click({
-            $pub = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; $u = if ($pub) { $pub } else { "http://127.0.0.1:$(Get-Port)" }
-            Log "Testing the connection at $u ..."
-            $script:reachUrl = $u; $script:reach = $false; $script:reachDeadline = (Get-Date).AddSeconds(8)
-            Show-Wait "Checking the connection..." { if (Test-Health $script:reachUrl) { $script:reach = $true }; $script:reach -or ((Get-Date) -gt $script:reachDeadline) }
-            if ($script:reach) { $txtReach.Text = "Reachable - ready to add the connector."; $txtReach.Foreground = $brGreenFg; Log "Connection OK - ready to add the connector." }
-            else { $txtReach.Text = "Not reachable yet. If you just turned the web link on, wait ~1-2 min (it warms up), then Test again."; $txtReach.Foreground = $brRedFg; Log "Not reachable yet." }
+            $pub = Get-EnvVal "VAULT_MCP_PUBLIC_URL"
+            if (-not $pub) {
+                # Local-only setup: a loopback health check is the whole story.
+                $u = "http://127.0.0.1:$(Get-Port)"
+                Log "Testing the local connection at $u ..."
+                $script:reachUrl = $u; $script:reach = $false; $script:reachDeadline = (Get-Date).AddSeconds(8)
+                Show-Wait "Checking the connection..." { if (Test-Health $script:reachUrl) { $script:reach = $true }; $script:reach -or ((Get-Date) -gt $script:reachDeadline) }
+                if ($script:reach) { $txtReach.Text = "Reachable - ready to add the connector."; $txtReach.Foreground = $brGreenFg; Log "Connection OK - ready to add the connector." }
+                else { $txtReach.Text = "Not reachable - is the server started (step 4)?"; $txtReach.Foreground = $brRedFg; Log "Not reachable - is the server started?" }
+                return
+            }
+            # Web link: test END-TO-END through Tailscale's public relays (the path
+            # Claude actually uses). From this PC a plain request takes a private
+            # tailnet shortcut and can look fine while the internet gets errors from
+            # a stale funnel session -- the child script forces the public route and
+            # heals a stale session automatically (bounces Tailscale, retests).
+            Log "Testing your web link from the internet side (and fixing it if stale)..."
+            $r = Run-CliBg "powershell" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$(Join-Path $scripts 'tailscale.ps1')`"", "-Action", "check", "-Port", (Get-Port)) "Checking your web link from the internet side...`r`n(If it went stale, this also reconnects it - up to a minute.)" 90
+            LogFile ("CHECK (timedOut=$($r.TimedOut)):`n" + $r.Output)
+            if ($r.Output -match "TS_PUBLIC_OK") {
+                $txtReach.Text = "Reachable from the internet - ready to add the connector."; $txtReach.Foreground = $brGreenFg
+                Log "Web link OK end-to-end - ready to add the connector."
+            }
+            elseif ($r.Output -match "TS_PUBLIC_HEALED") {
+                $txtReach.Text = "Your web link had gone stale; it was reconnected automatically and works now."; $txtReach.Foreground = $brGreenFg
+                Log "Web link was stale - reconnected automatically. It works now."
+            }
+            elseif ($r.Output -match "TS_LOCAL_FAIL") {
+                $txtReach.Text = "The server isn't running - click Start (step 4), then Test again."; $txtReach.Foreground = $brRedFg
+                Log "Server isn't running - start it first (step 4)."
+            }
+            elseif ($r.Output -match "TS_FUNNEL_OFF") {
+                $txtReach.Text = "The web link is off - do step 3 (Turn on), then Test again."; $txtReach.Foreground = $brRedFg
+                Log "Web link is off - turn it on in step 3."
+            }
+            elseif ($r.Output -match "TS_NOT_CONNECTED|TS_NOT_FOUND") {
+                $txtReach.Text = "Tailscale isn't connected - use step 3 (Connect), then Test again."; $txtReach.Foreground = $brRedFg
+                Log "Tailscale isn't connected - use step 3."
+            }
+            elseif ($r.Output -match "TS_PUBLIC_NODNS") {
+                $txtReach.Text = "Your web link isn't visible on the internet yet (takes 1-2 min after turning it on). Wait, then Test again."; $txtReach.Foreground = $brRedFg
+                Log "Web link not visible on the internet yet - wait 1-2 min and Test again."
+            }
+            else {
+                $txtReach.Text = "Still not reachable from the internet after reconnecting. Restart your PC's Tailscale (step 3 Connect) and Test again."; $txtReach.Foreground = $brRedFg
+                Log "Web link still not reachable after auto-fix - details saved to the log."
+            }
         })
 
     $hlUrl.Add_Click({ $u = Get-EnvVal "VAULT_MCP_PUBLIC_URL"; if ($u) { try { Start-Process $u } catch { } } })

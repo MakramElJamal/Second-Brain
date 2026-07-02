@@ -2,8 +2,18 @@
 # process of the app so none of the slow/blocking tailscale calls touch the UI
 # thread. Prints machine-readable markers the app parses:
 #   TS_NOT_FOUND | TS_NOT_CONNECTED | TS_CONNECTED <dns> | TS_FUNNEL_ON <url> | TS_FUNNEL_OFF
+#   TS_LOCAL_FAIL | TS_PUBLIC_OK <url> | TS_PUBLIC_HEALED <url> | TS_PUBLIC_NODNS | TS_PUBLIC_FAIL
+#
+# -Action check: TRUE end-to-end test of the web link. From this machine,
+# requests to our own ts.net name take a private tailnet shortcut and never
+# touch Tailscale's PUBLIC relays -- so a plain reachability test can say
+# "Reachable" while the internet (Claude) gets TLS resets from a stale funnel
+# session. This action resolves the hostname on PUBLIC DNS and forces the
+# request through a public relay IP (curl --resolve), exactly the path Claude
+# takes. If that fails while the local server is fine, it heals the stale
+# session by bouncing the Tailscale backend once and retests.
 [CmdletBinding()]
-param([ValidateSet("connect", "weblink")][string]$Action = "connect", [int]$Port = 8531)
+param([ValidateSet("connect", "weblink", "check")][string]$Action = "connect", [int]$Port = 8531)
 
 $ts = Join-Path $env:ProgramFiles "Tailscale\tailscale.exe"
 if (-not (Test-Path $ts)) { $ts = Join-Path ${env:ProgramFiles(x86)} "Tailscale\tailscale.exe" }
@@ -27,6 +37,64 @@ if ((Backend) -ne "Running") { Write-Output "TS_NOT_CONNECTED"; exit 0 }
 $d = Dns
 
 if ($Action -eq "connect") { Write-Output "TS_CONNECTED $d"; exit 0 }
+
+if ($Action -eq "check") {
+    $curl = Join-Path $env:SystemRoot "System32\curl.exe"   # ships with Windows 10 1803+
+
+    # 1. The local server itself: if IT is down, the web link isn't the problem.
+    $localOk = $false
+    if (Test-Path $curl) {
+        $code = & $curl -s -m 5 -o NUL -w "%{http_code}" "http://127.0.0.1:$Port/health" 2>$null
+        $localOk = ($code -eq "200")
+    }
+    else {
+        try { $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 5 -UseBasicParsing; $localOk = ($r.StatusCode -eq 200) } catch { }
+    }
+    if (-not $localOk) { Write-Output "TS_LOCAL_FAIL"; exit 0 }
+    if (-not $d) { Write-Output "TS_NOT_CONNECTED"; exit 0 }
+
+    # 2. Funnel must be configured at all before the public edge can work.
+    $fs = (& $ts funnel status 2>&1 | Out-String)
+    if ($fs -notmatch "https://") { Write-Output "TS_FUNNEL_OFF"; exit 0 }
+
+    # 3. The real test: through a PUBLIC relay, like Claude. Without curl.exe we
+    # cannot force the public route; fall back to the (weaker) direct request.
+    function Test-PublicEdge([string]$dns) {
+        if (-not (Test-Path $curl)) {
+            try { $r = Invoke-WebRequest -Uri "https://$dns/health" -TimeoutSec 12 -UseBasicParsing; if ($r.StatusCode -eq 200) { return "OK" } } catch { }
+            return "FAIL"
+        }
+        $ips = @()
+        try {
+            $ips = @(Resolve-DnsName -Name $dns -Type A -Server 8.8.8.8 -ErrorAction Stop |
+                Where-Object { $_.IPAddress } | ForEach-Object { $_.IPAddress })
+        }
+        catch { }
+        if (-not $ips) { return "NODNS" }
+        foreach ($ip in ($ips | Select-Object -First 2)) {
+            $code = & $curl -s -m 12 -o NUL -w "%{http_code}" --resolve "${dns}:443:$ip" "https://$dns/health" 2>$null
+            if ($code -eq "200") { return "OK" }
+        }
+        return "FAIL"
+    }
+
+    $probe = Test-PublicEdge $d
+    if ($probe -eq "OK") { Write-Output "TS_PUBLIC_OK https://$d"; exit 0 }
+    if ($probe -eq "NODNS") { Write-Output "TS_PUBLIC_NODNS"; exit 0 }
+
+    # 4. Local fine + funnel on + public dead = the classic stale funnel session
+    # (common after sleep/wake). Bounce the backend once and retest.
+    Write-Output "Public path failed; reconnecting Tailscale to refresh the web link..."
+    & $ts down 2>$null | Out-Null
+    Start-Sleep -Seconds 2
+    & $ts up 2>$null | Out-Null
+    $deadline = (Get-Date).AddSeconds(20)
+    while ((Backend) -ne "Running" -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 700 }
+    Start-Sleep -Seconds 3
+    if ((Test-PublicEdge $d) -eq "OK") { Write-Output "TS_PUBLIC_HEALED https://$d"; exit 0 }
+    Write-Output "TS_PUBLIC_FAIL"
+    exit 0
+}
 
 # weblink: turn on Funnel for the port.
 # IMPORTANT: `tailscale funnel` HANGS waiting for approval if Funnel isn't enabled

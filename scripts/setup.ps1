@@ -59,6 +59,14 @@ try {
 catch { }
 
 if (-not $SkipInstall) {
+    # A running server holds .venv\Scripts\second-brain-mcp.exe open; reinstalling
+    # over it fails with a Windows file-lock error (WinError 32) PARTWAY through --
+    # the old package gets uninstalled but the new one never lands, leaving the
+    # venv broken until the next successful install. Stop it first: best-effort
+    # and silent (there's nothing to stop on a fresh install), and this must never
+    # itself fail setup.
+    try { & (Join-Path $PSScriptRoot "stop.ps1") -Quiet } catch { }
+
     # pip writes harmless notices to stderr and its exit code is finicky; let it
     # run, then judge success by whether the components actually import (below).
     $ErrorActionPreference = "Continue"
@@ -68,13 +76,25 @@ if (-not $SkipInstall) {
     Write-Host "Installing components (about a minute). Packages download below:" -ForegroundColor Cyan
     # Install the EXACT dependency versions this project was tested with
     # (requirements.lock), then the project itself without re-resolving deps.
-    # Falls back to a plain editable install if the lockfile is missing.
+    # The lock pins LIBRARY versions only -- the user's own Python is used. On a
+    # Python newer than the lock was built for, a pinned compiled package may
+    # have no wheel yet and pip exits non-zero; fall back to a plain editable
+    # install so pip resolves versions that DO fit their Python (less tested,
+    # but working beats reproducible-and-broken). Same fallback if the lockfile
+    # is missing. The import check below remains the real success gate.
     $lock = Join-Path $root "requirements.lock"
+    $lockOk = $false
     if (Test-Path $lock) {
         & $venvPy -m pip install -r $lock
-        & $venvPy -m pip install -e $root --no-deps
+        if ($LASTEXITCODE -eq 0) {
+            & $venvPy -m pip install -e $root --no-deps
+            $lockOk = ($LASTEXITCODE -eq 0)
+        }
+        if (-not $lockOk) {
+            Write-Host "Pinned versions didn't fit this Python; installing compatible versions instead..." -ForegroundColor Yellow
+        }
     }
-    else {
+    if (-not $lockOk) {
         & $venvPy -m pip install -e $root
     }
     $ErrorActionPreference = "Stop"
