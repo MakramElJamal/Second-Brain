@@ -215,12 +215,17 @@ namespace SB {
       <Setter Property="Background" Value="#4F46E5"/><Setter Property="Foreground" Value="White"/>
       <Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="16,8"/>
       <Setter Property="Cursor" Value="Hand"/><Setter Property="FontSize" Value="13"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="7">
+            <Border x:Name="ov" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Opacity" Value="0.88"/></Trigger>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ov" Property="Background" Value="#14000000"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="ov" Property="Background" Value="#30000000"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="bd" Property="Opacity" Value="0.45"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
@@ -335,13 +340,13 @@ namespace SB {
             <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="34"/><RowDefinition Height="34"/></Grid.RowDefinitions>
             <TextBlock Grid.Row="0" Grid.Column="0" Text="Link" VerticalAlignment="Center" Foreground="#6B7280"/>
             <TextBlock Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0" TextTrimming="CharacterEllipsis"><Hyperlink x:Name="hlUrl"><Run x:Name="runUrl" Text="(do step 3)"/></Hyperlink></TextBlock>
-            <Button Grid.Row="0" Grid.Column="2" x:Name="btnCopyLink" Content="Copy" Style="{StaticResource Ghost}" Margin="0,4" MinWidth="72"/>
+            <Button Grid.Row="0" Grid.Column="2" x:Name="btnCopyLink" Content="Copy" Style="{StaticResource Ghost}" Padding="12,3" Margin="0,4" MinWidth="72"/>
             <TextBlock Grid.Row="1" Grid.Column="0" Text="Username" VerticalAlignment="Center" Foreground="#6B7280"/>
             <TextBlock Grid.Row="1" Grid.Column="1" x:Name="txtUser" Text="obsidian" VerticalAlignment="Center" FontFamily="Consolas"/>
-            <Button Grid.Row="1" Grid.Column="2" x:Name="btnCopyUser" Content="Copy" Style="{StaticResource Ghost}" Margin="0,4" MinWidth="72"/>
+            <Button Grid.Row="1" Grid.Column="2" x:Name="btnCopyUser" Content="Copy" Style="{StaticResource Ghost}" Padding="12,3" Margin="0,4" MinWidth="72"/>
             <TextBlock Grid.Row="2" Grid.Column="0" Text="Password" VerticalAlignment="Center" Foreground="#6B7280"/>
             <TextBlock Grid.Row="2" Grid.Column="1" x:Name="txtPass" Text="-" VerticalAlignment="Center" FontFamily="Consolas"/>
-            <Button Grid.Row="2" Grid.Column="2" x:Name="btnCopyPass" Content="Copy" Style="{StaticResource Ghost}" Margin="0,4" MinWidth="72"/>
+            <Button Grid.Row="2" Grid.Column="2" x:Name="btnCopyPass" Content="Copy" Style="{StaticResource Ghost}" Padding="12,3" Margin="0,4" MinWidth="72"/>
           </Grid>
           <Separator Margin="0,12,0,10" Background="#E5E7EB"/>
           <TextBlock x:Name="txtReach" Text="Start the server, then Test before adding the connector." FontSize="12" Foreground="#6B7280" TextWrapping="Wrap" Margin="0,0,0,10"/>
