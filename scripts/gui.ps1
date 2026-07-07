@@ -390,6 +390,7 @@ namespace SB {
     <DockPanel Grid.Row="2" Margin="2,14,2,0">
       <CheckBox x:Name="chkAuto" Content="Start automatically when I turn on my PC" VerticalAlignment="Center"/>
       <Button x:Name="btnUninstall" Content="Uninstall" Style="{StaticResource Ghost}" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
+      <TextBlock x:Name="txtUpdateNotice" Visibility="Collapsed" VerticalAlignment="Center" Margin="18,0,12,0" FontSize="12" TextTrimming="CharacterEllipsis"><Run Text="&#9679; " Foreground="#D97706"/><Hyperlink x:Name="hlUpdateNotice">A new version is available - click here to update</Hyperlink></TextBlock>
     </DockPanel>
   </Grid>
 </Window>
@@ -415,6 +416,7 @@ namespace SB {
     $dotTsConn = & $el "dotTsConn"; $txtTsLogin = & $el "txtTsLogin"; $btnTsLogin = & $el "btnTsLogin"; $fbLogin = & $el "fbLogin"; $hlLogin = & $el "hlLogin"
     $dotTsLink = & $el "dotTsLink"; $txtTsFunnel = & $el "txtTsFunnel"; $btnTsFunnel = & $el "btnTsFunnel"; $fbFunnel = & $el "fbFunnel"; $hlFunnel = & $el "hlFunnel"
     $dotSrv = & $el "dotSrv"; $txtSrv = & $el "txtSrv"; $btnStart = & $el "btnStart"; $btnRestart = & $el "btnRestart"; $btnStop = & $el "btnStop"
+    $txtUpdateNotice = & $el "txtUpdateNotice"; $hlUpdateNotice = & $el "hlUpdateNotice"
     $btnFixConn = & $el "btnFixConn"; $btnConnInfo = & $el "btnConnInfo"; $hlUrl = & $el "hlUrl"; $runUrl = & $el "runUrl"
     $btnCopyLink = & $el "btnCopyLink"; $txtUser = & $el "txtUser"; $btnCopyUser = & $el "btnCopyUser"; $txtPass = & $el "txtPass"; $btnCopyPass = & $el "btnCopyPass"
     $txtReach = & $el "txtReach"; $btnTest = & $el "btnTest"
@@ -508,32 +510,65 @@ namespace SB {
     # ---------- events ----------
     $btnRefresh.Add_Click({ Log "Refreshing status..."; Refresh-UI; Log "Ready." })
 
-    $btnUpdate.Add_Click({
-            try {
-                if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-                    Info("Updating needs Git, which isn't installed. You can download the latest version from the project page instead (opening it now).")
-                    Start-Process "https://github.com/MakramElJamal/Second-Brain"; return
-                }
-                if (-not (Test-Path (Join-Path $root ".git"))) {
-                    Info("This copy wasn't installed with Git, so it can't update itself. Download the latest ZIP from the project page (opening now) and replace this folder.")
-                    Start-Process "https://github.com/MakramElJamal/Second-Brain"; return
-                }
-                Log "Checking for updates..."
-                $before = (Invoke-CliCapture "git" "-C `"$root`" rev-parse HEAD" 10000)
-                $r = Run-CliBg "git" @("-C", "`"$root`"", "pull", "--ff-only", "origin", "main") "Checking for updates..." 90
-                LogFile ("UPDATE (timedOut=$($r.TimedOut)):`n" + $r.Output)
-                $after = (Invoke-CliCapture "git" "-C `"$root`" rev-parse HEAD" 10000)
-                if ($r.Output -match "Already up to date") { Log "You're on the latest version."; Info("You're already on the latest version.") }
-                elseif ($before -and $after -and ($before.Trim() -ne $after.Trim())) {
-                    Log "Updated to the latest version - restarting the app..."
-                    Info("Updated to the latest version! The app will now restart.")
-                    Start-Process (Join-Path $root "Install Second Brain.cmd")
-                    $win.Close()
-                }
-                else { Log "Update didn't complete - details saved to the log."; Info("Couldn't update. Details were saved to the log - try again, or download the latest ZIP from the project page.") }
+    function Do-Update {
+        try {
+            if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+                Info("Updating needs Git, which isn't installed. You can download the latest version from the project page instead (opening it now).")
+                Start-Process "https://github.com/MakramElJamal/Second-Brain"; return
             }
-            catch { Log ("Update error: " + $_.Exception.Message); LogFile ("UPDATE EXC: " + $_.Exception.ToString()) }
-        })
+            if (-not (Test-Path (Join-Path $root ".git"))) {
+                Info("This copy wasn't installed with Git, so it can't update itself. Download the latest ZIP from the project page (opening now) and replace this folder.")
+                Start-Process "https://github.com/MakramElJamal/Second-Brain"; return
+            }
+            Log "Checking for updates..."
+            $before = (Invoke-CliCapture "git" "-C `"$root`" rev-parse HEAD" 10000)
+            $r = Run-CliBg "git" @("-C", "`"$root`"", "pull", "--ff-only", "origin", "main") "Checking for updates..." 90
+            LogFile ("UPDATE (timedOut=$($r.TimedOut)):`n" + $r.Output)
+            $after = (Invoke-CliCapture "git" "-C `"$root`" rev-parse HEAD" 10000)
+            if ($r.Output -match "Already up to date") { $txtUpdateNotice.Visibility = "Collapsed"; Log "You're on the latest version."; Info("You're already on the latest version.") }
+            elseif ($before -and $after -and ($before.Trim() -ne $after.Trim())) {
+                Log "Updated to the latest version - restarting the app..."
+                Info("Updated to the latest version! The app will now restart.")
+                Start-Process (Join-Path $root "Install Second Brain.cmd")
+                $win.Close()
+            }
+            else { Log "Update didn't complete - details saved to the log."; Info("Couldn't update. Details were saved to the log - try again, or download the latest ZIP from the project page.") }
+        }
+        catch { Log ("Update error: " + $_.Exception.Message); LogFile ("UPDATE EXC: " + $_.Exception.ToString()) }
+    }
+    $btnUpdate.Add_Click({ Do-Update })
+    $hlUpdateNotice.Add_Click({ Do-Update })
+
+    # Passive update check: quietly fetch origin/main in a child process at
+    # startup and show the footer notice when the local copy is behind. Never
+    # blocks the UI, never nags with a popup -- just the one-line notice.
+    function Start-UpdateCheck {
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return }
+        if (-not (Test-Path (Join-Path $root ".git"))) { return }
+        $script:updOut = [System.IO.Path]::GetTempFileName()
+        $cmd = "git -C '$root' fetch --quiet origin main; git -C '$root' rev-parse HEAD; git -C '$root' rev-parse origin/main"
+        try {
+            $script:updProc = Start-Process powershell -WindowStyle Hidden -PassThru `
+                -RedirectStandardOutput $script:updOut -ArgumentList "-NoProfile", "-Command", $cmd
+        }
+        catch { return }
+        $ut = New-Object System.Windows.Threading.DispatcherTimer
+        $ut.Interval = [TimeSpan]::FromSeconds(2)
+        $ut.Add_Tick({
+                if (-not $script:updProc.HasExited) { return }
+                $ut.Stop()
+                try {
+                    $shas = @(Get-Content $script:updOut -ErrorAction SilentlyContinue | Where-Object { $_ -match "^[0-9a-f]{40}$" })
+                    Remove-Item $script:updOut -ErrorAction SilentlyContinue
+                    if ($shas.Count -ge 2 -and $shas[0] -ne $shas[1]) {
+                        $txtUpdateNotice.Visibility = "Visible"
+                        Log "A new version is available - click Update (top right) or the notice below."
+                    }
+                }
+                catch { }
+            }.GetNewClosure())
+        $ut.Start()
+    }
 
     $btnPy.Add_Click({
             if (Have-Winget) {
@@ -708,6 +743,7 @@ namespace SB {
         }
     }
     catch { LogFile ("WATCHDOG STARTUP EXC: " + $_.Exception.ToString()) }
+    Start-UpdateCheck
     Log "Ready. Follow steps 1-3 on the left, then Start the server and add the connector."
     [void]$win.ShowDialog()
 }
