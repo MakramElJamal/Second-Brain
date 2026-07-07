@@ -78,6 +78,13 @@ Operator notes / residual considerations:
   in a hidden window (managed by the app's Start/Stop). The **Install for me**
   buttons run `winget install` for Python (per-user, no admin) and, for web access,
   Tailscale (which, being a VPN service, will prompt the normal Windows UAC).
+- **Sleep/wake auto-reconnect tasks.** When the web link is turned on, the app
+  registers two **non-elevated** scheduled tasks (run as your user):
+  `SecondBrainHealOnWake` (fires after resume from sleep) and
+  `SecondBrainHealPeriodic` (every 15 min). Both run the in-repo
+  `scripts\heal.ps1`, which probes the web link through Tailscale's public
+  relays and reconnects a stale session; results go to `logs\heal.log`.
+  `uninstall.ps1` (and `scripts\watchdog.ps1 -Action disable`) removes them.
 - **`stop.ps1`** stops whatever is listening on your configured `VAULT_MCP_PORT`
   and any running `cloudflared` process — keep that in mind if you run
   `cloudflared` for something unrelated.

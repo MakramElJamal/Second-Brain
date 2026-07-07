@@ -209,6 +209,7 @@ vault.
 | ChatGPT can read but not write | Enable **Developer mode** (Settings → Apps → Advanced). |
 | Changed code, nothing happened | No live reload — stop and re-run `.\run.ps1`, then reconnect the client. |
 | Public URL changed (Cloudflare quick) | Expected — it rotates each run. Use **Tailscale Funnel** for a stable URL. |
+| Stopped working after laptop sleep/hibernate | It self-heals within ~1 min of waking (auto-reconnect task). If Claude still errors, open the app and click **Test connection** — it reconnects a stale web link automatically. |
 
 ---
 

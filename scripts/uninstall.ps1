@@ -19,6 +19,10 @@ if (-not $Yes) {
 # Stop the server first so nothing is locked.
 & (Join-Path $PSScriptRoot "stop.ps1") -Quiet
 
+# Remove the sleep/wake auto-reconnect tasks (registered when the web link
+# was turned on). Best-effort; nothing to remove on a local-only install.
+try { & (Join-Path $PSScriptRoot "watchdog.ps1") -Action disable | Out-Null; Write-Host "Removed auto-reconnect tasks" } catch { }
+
 $targets = @(".venv", ".pytest_cache",
     "src\second_brain_ext.egg-info", "src\obsidian_vault_mcp.egg-info",
     "second_brain_web_mcp.egg-info", "build")

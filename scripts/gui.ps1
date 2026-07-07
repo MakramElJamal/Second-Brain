@@ -445,6 +445,19 @@ namespace SB {
         }
         catch { }
     }
+    # Auto-reconnect after sleep: register the heal tasks (watchdog.ps1) so the
+    # web link fixes itself after hibernate/sleep instead of erroring in Claude
+    # until someone clicks Test. Quick (local task registration), non-admin,
+    # and idempotent -- safe to call whenever the web link is (already) on.
+    function Enable-Watchdog {
+        try {
+            $w = & (Join-Path $scripts "watchdog.ps1") -Action enable 2>&1 | Out-String
+            if ($w -match "WATCHDOG_ON") { Log "Auto-reconnect after sleep: ON (the web link now heals itself)." }
+            else { LogFile ("WATCHDOG enable unexpected output:`n" + $w) }
+        }
+        catch { LogFile ("WATCHDOG EXC: " + $_.Exception.ToString()) }
+    }
+
     function Restart-Server {
         if (Test-Running) {
             [void](Run-Task (Join-Path $scripts "stop.ps1") @("-Quiet") "Restarting the server..." $null)
@@ -577,6 +590,7 @@ namespace SB {
                 LogFile ("WEBLINK (timedOut=$($r.TimedOut)):`n" + $r.Output)
                 if ($r.Output -match "TS_FUNNEL_ON https://(\S+)") {
                     $dns = $matches[1]; Set-EnvVal "VAULT_MCP_PUBLIC_URL" "https://$dns"; Set-EnvVal "VAULT_MCP_ALLOWED_HOSTS" $dns; Log "Web link is ON: https://$dns"
+                    Enable-Watchdog
                     if (Test-Running) { Log "Restarting the server so it uses the web link..."; Restart-Server }
                 }
                 elseif ($r.Output -match "TS_FUNNEL_NEEDS_ENABLE (\S+)") {
@@ -685,6 +699,15 @@ namespace SB {
         })
 
     Refresh-UI
+    # Existing installs: if the web link is already on but the sleep/wake heal
+    # tasks aren't registered yet (set up before this feature), add them now.
+    try {
+        if ((Test-Configured) -and (Get-EnvVal "VAULT_MCP_PUBLIC_URL")) {
+            $ws = & (Join-Path $scripts "watchdog.ps1") -Action status 2>$null
+            if ("$ws" -ne "enabled") { Enable-Watchdog }
+        }
+    }
+    catch { LogFile ("WATCHDOG STARTUP EXC: " + $_.Exception.ToString()) }
     Log "Ready. Follow steps 1-3 on the left, then Start the server and add the connector."
     [void]$win.ShowDialog()
 }
