@@ -14,6 +14,8 @@ listener. Read tools reuse the upstream path-safety for file access.
 from __future__ import annotations
 
 import logging
+import os
+import re
 import threading
 from pathlib import Path
 
@@ -23,6 +25,7 @@ from pydantic import BaseModel, Field
 from obsidian_vault_mcp import config
 from obsidian_vault_mcp.extensions import Extension
 from obsidian_vault_mcp.vault import read_file
+from obsidian_vault_mcp.write_events import register_write_listener
 
 from . import chat, ranking, sections, templates, writing
 from . import tags as tag_gov  # aliased: 'tags' is used as a tool parameter name
@@ -47,7 +50,10 @@ EDIT = ToolAnnotations(
 # --- Tool curation -------------------------------------------------------
 # The LLM only sees these tools. Everything else upstream registers stays in the
 # code but is un-advertised (pruned via mcp.remove_tool) -- fully reversible.
-OUR_TOOLS = {"search_notes", "get_note", "vault_map", "create_note", "edit_note", "archive_chat"}
+OUR_TOOLS = {
+    "search_notes", "get_note", "vault_map", "create_note", "edit_note",
+    "archive_chat", "create_folder", "related_notes",
+}
 # Upstream low-level tools we deliberately keep exposed.
 KEEP_UPSTREAM = {"vault_search_frontmatter", "vault_move"}
 # Writes now go through our house-style create_note / edit_note, so upstream's
@@ -60,6 +66,15 @@ ALLOWLIST = OUR_TOOLS | KEEP_UPSTREAM
 MAX_RECENT = 10
 MAX_TAGS = 80
 MAX_FOLDERS = 60  # folder-tree entries returned by vault_map
+MAX_RELATED = 30  # links returned per direction by related_notes
+
+# Obsidian wikilink: [[target]], [[target|alias]], [[target#section]].
+_WIKILINK = re.compile(r"\[\[([^\[\]]+?)\]\]")
+
+
+def _link_target(raw: str) -> str:
+    """The note a wikilink points at, stripped of alias and section parts."""
+    return raw.split("|")[0].split("#")[0].strip()
 
 
 # Output-model field descriptions are re-sent to the model every turn (they live
@@ -120,6 +135,23 @@ class CreateResult(BaseModel):
     message: str = ""
 
 
+class FolderResult(BaseModel):
+    created: bool
+    status: str = Field(description="created | exists | needs_bucket | needs_folder")
+    path: str | None = Field(default=None, description="Vault-relative folder path (bucket/folder).")
+    bucket: str | None = None
+    similar_folders: list[str] = Field(default_factory=list, description="Close existing folders - prefer one of these over a near-duplicate.")
+    suggestions: list[str] = Field(default_factory=list, description="Valid buckets, when status=needs_bucket.")
+    message: str = ""
+
+
+class RelatedNotes(BaseModel):
+    id: str
+    links_to: list[NoteRef] = Field(default_factory=list, description="Notes this note wikilinks to. Pass an id to get_note.")
+    linked_from: list[NoteRef] = Field(default_factory=list, description="Notes that link back to this one.")
+    unresolved: list[str] = Field(default_factory=list, description="Wikilink targets with no matching note in the vault.")
+
+
 class EditResult(BaseModel):
     ok: bool
     id: str
@@ -152,6 +184,24 @@ class SecondBrainExtension(Extension):
         self._rebuild_all()
         # Mirror the upstream index's debounced .md changes into our content index.
         frontmatter_index.add_change_listener(self._on_change)
+        # The filesystem watcher ignores DIRECTORY events, so a moved/renamed
+        # folder (e.g. archiving a whole project: Projects/X -> Archives/X)
+        # changes every note id under it without a single per-file event --
+        # both indexes go stale until restart. Listen on the write-event seam
+        # (vault_move fires "moved") and rebuild both when a folder moves.
+        self._fm_index = frontmatter_index
+        register_write_listener(self._on_write_event)
+
+    def _on_write_event(self, operation: str, paths: list) -> None:
+        if operation != "moved":
+            return
+        if not any(isinstance(p, str) and not p.endswith(".md") for p in paths):
+            return  # single-note moves are covered by the watcher's MOVED events
+        self._rebuild_all()
+        idx = getattr(self, "_fm_index", None)
+        if idx is not None:
+            idx.rebuild()
+        logger.info("second_brain_ext: folder move detected (%s); indexes rebuilt", paths)
 
     # -- index maintenance -------------------------------------------------
 
@@ -197,13 +247,30 @@ class SecondBrainExtension(Extension):
             return list(self._notes.values())
 
     def _folder_counts(self) -> dict[str, int]:
-        """Every folder that holds notes -> note count (full vault-relative paths)."""
+        """Every folder -> note count (full vault-relative paths).
+
+        Note-derived counts unioned with the REAL directory tree, so an empty
+        folder (e.g. a project just made with create_folder, before its first
+        note) still shows up in vault_map and in folder-snapping.
+        """
         counts: dict[str, int] = {}
         for n in self._snapshot():
             parts = n.id.split("/")
             if len(parts) > 1:
                 folder = "/".join(parts[:-1])
                 counts[folder] = counts.get(folder, 0) + 1
+        root = config.VAULT_PATH
+        try:
+            for dirpath, dirnames, _files in os.walk(root):
+                dirnames[:] = [
+                    d for d in dirnames
+                    if d not in config.EXCLUDED_DIRS and not d.startswith(".")
+                ]
+                for d in dirnames:
+                    rel = (Path(dirpath) / d).relative_to(root).as_posix()
+                    counts.setdefault(rel, 0)
+        except OSError:
+            pass
         return counts
 
     def _subfolders(self, bucket: str) -> set[str]:
@@ -342,6 +409,92 @@ class SecondBrainExtension(Extension):
             bodies.
             """
             return ext._vault_map(recent_limit)
+
+        @mcp.tool(title="Create folder", annotations=WRITE)
+        def create_folder(bucket: str, folder: str) -> FolderResult:
+            """Create a folder inside a PARA bucket. "Create a project for X" =
+            create_folder(bucket='Projects', folder='X'), then usually
+            create_note(title='X', bucket='Projects', folder='X') as its
+            overview note. Call vault_map first for valid buckets and the
+            existing tree. A name close to an existing folder snaps to it
+            (status='exists') instead of fragmenting the vault; nested paths
+            like 'Historic Figures/Napoleon' are fine.
+            """
+            canonical = templates.normalize_bucket(bucket, ext._buckets())
+            if canonical is None:
+                return FolderResult(
+                    created=False, status="needs_bucket",
+                    suggestions=sorted(ext._buckets()),
+                    message=f"Unknown bucket '{bucket}'. Choose one of the suggestions and retry.",
+                )
+            req = (folder or "").strip().strip("/")
+            if req.lower().startswith(canonical.lower() + "/"):
+                req = req[len(canonical) + 1:]  # tolerate a bucket-prefixed path
+            if not req:
+                return FolderResult(created=False, status="needs_folder",
+                                    bucket=canonical, message="Pass the folder name to create.")
+            resolved, is_new, similar = templates.normalize_folder(req, ext._subfolders(canonical))
+            rel = f"{canonical}/{resolved}"
+            if not is_new:
+                return FolderResult(
+                    created=False, status="exists", path=rel, bucket=canonical,
+                    similar_folders=similar,
+                    message=f"'{rel}' already exists - file notes into it with create_note(folder='{resolved}').",
+                )
+            created = writing.make_folder(rel)
+            msg = f"Created {rel}." + (f" Similar existing: {', '.join(similar)}." if similar else "")
+            return FolderResult(
+                created=created, status="created" if created else "exists",
+                path=rel, bucket=canonical, similar_folders=similar, message=msg,
+            )
+
+        @mcp.tool(title="Related notes", annotations=READ_ONLY)
+        def related_notes(id: str) -> RelatedNotes:
+            """Hop the vault's knowledge graph without reading any content: the
+            notes this note wikilinks to (resolved to ids) and the notes that
+            link back to it. Use between search_notes and get_note to find the
+            right neighborhood cheaply - titles and ids only, never bodies.
+            """
+            note = ext._get(id) or build_note(id)
+            if note is None:
+                raise ValueError(
+                    f"No note with id '{id}'. Call search_notes first to get a valid id."
+                )
+            notes = ext._snapshot()
+            by_title: dict[str, Note] = {}
+            by_stem: dict[str, Note] = {}
+            for n in notes:
+                by_title.setdefault(n.title.lower(), n)
+                by_stem.setdefault(Path(n.id).stem.lower(), n)
+
+            links_to: list[NoteRef] = []
+            unresolved: list[str] = []
+            seen: set[str] = set()
+            for m in _WIKILINK.finditer(note.body):
+                target = _link_target(m.group(1))
+                key = target.lower()
+                if not target or key in seen:
+                    continue
+                seen.add(key)
+                hit = by_title.get(key) or by_stem.get(Path(target).stem.lower())
+                if hit is not None and hit.id != note.id:
+                    if len(links_to) < MAX_RELATED:
+                        links_to.append(NoteRef(id=hit.id, title=hit.title, bucket=hit.bucket or "(root)"))
+                elif hit is None and len(unresolved) < MAX_RELATED:
+                    unresolved.append(target)
+
+            self_keys = {note.title.lower(), Path(note.id).stem.lower()}
+            linked_from: list[NoteRef] = []
+            for n in notes:
+                if n.id == note.id or len(linked_from) >= MAX_RELATED:
+                    continue
+                for m in _WIKILINK.finditer(n.body):
+                    t = _link_target(m.group(1)).lower()
+                    if t in self_keys or Path(t).stem.lower() in self_keys:
+                        linked_from.append(NoteRef(id=n.id, title=n.title, bucket=n.bucket or "(root)"))
+                        break
+            return RelatedNotes(id=note.id, links_to=links_to,
+                                linked_from=linked_from, unresolved=unresolved)
 
         @mcp.tool(title="Create note", annotations=WRITE)
         def create_note(

@@ -85,18 +85,20 @@ To turn it off or remove it later, open the same window and click **Stop** or
 
 ---
 
-## What the assistant sees: 8 curated tools
+## What the assistant sees: 10 curated tools
 
 | Tool | Kind | What it does |
 |---|---|---|
 | `search_notes` | read | Ranked snippets + summaries (never full notes). Filters: bucket, tags, dates. |
 | `get_note` | read | One note by id; `section=` returns a single heading, `outline=true` just the headings. |
-| `vault_map` | read | Cheap overview: buckets, **folder tree**, projects, approved tags, recent. Call before writing. |
+| `related_notes` | read | Hop the wikilink graph: what a note links to + what links back — ids/titles only, no bodies. |
+| `vault_map` | read | Cheap overview: buckets, **folder tree** (incl. empty folders), projects, approved tags, recent. Call before writing. |
 | `create_note` | write | New note — PARA-placed, templated, tag- and folder-governed, idempotent. |
+| `create_folder` | write | New folder in a bucket ("create a project for X"); snaps to near-duplicate existing folders. |
 | `edit_note` | write | `append` / `replace_section` / `set_frontmatter` — send only the changed slice. |
 | `archive_chat` | write | Distill *this* conversation into a compact, searchable note for cross-LLM memory. |
 | `vault_search_frontmatter` | read | Query notes by a frontmatter field (kept from upstream). |
-| `vault_move` | write | Move / rename a note (kept from upstream). |
+| `vault_move` | write | Move / rename a note **or a whole folder** (e.g. archive a project); indexes refresh automatically. |
 
 The underlying core ships ~20 low-level tools; we prune to this allowlist to save
 tokens and steer the model to safe, house-style operations (reversible — see

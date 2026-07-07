@@ -32,7 +32,25 @@ from obsidian_vault_mcp.write_events import fire_write
 
 # Register the extension's operations so audit consumers (and anything that
 # consults MUTATION_OPERATIONS) treat them as mutations, matching upstream tools.
-MUTATION_OPERATIONS.update({"create_note", "edit_note", "archive_chat"})
+MUTATION_OPERATIONS.update({"create_note", "edit_note", "archive_chat", "create_folder"})
+
+
+def make_folder(rel: str) -> bool:
+    """Create a folder inside the vault (path-safe, audited). True if newly made.
+
+    Folders have no checksum, so the audit record carries only the operation and
+    target path. Fires the write-event seam like every other mutation here.
+    """
+    path = resolve_vault_path(rel)
+    if path.is_dir():
+        return False
+    path.mkdir(parents=True)
+    if audit_enabled():
+        write_audit_record(build_audit_record(
+            operation="create_folder", target_path=rel, operation_status="success",
+        ))
+    fire_write("created", [rel])
+    return True
 
 
 def _audited_write(rel: str, content: str, operation: str) -> None:
