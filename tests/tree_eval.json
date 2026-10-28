@@ -1,0 +1,134 @@
+[
+ {
+  "category": "specific",
+  "query": "potential-held method photocurrent result",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/10-16August/03 - 13 August 2026 - Photocurrent U-I Curve Run 2 - Potential-Held Method.md"
+ },
+ {
+  "category": "specific",
+  "query": "gas chromatography calibration hydrogen standards",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/3-9August/01 - 4 August 2026 - Gas Chromatography Calibration.md"
+ },
+ {
+  "category": "specific",
+  "query": "dichroic filter angle in water",
+  "expected": "Areas/Lab-Internship/engineering-logs/October 2026/19-23October/03 - 22 October 2026 - Dichroic Filter Angle.md"
+ },
+ {
+  "category": "specific",
+  "query": "how does zep handle facts that stop being true",
+  "expected": [
+   "Projects/second-brain-mcp/Research/papers/Zep — Temporal Knowledge Graph for Agent Memory.md",
+   "Projects/second-brain-mcp/business/competitor analysis/zep/Zep - Technical Breakdown.md"
+  ]
+ },
+ {
+  "category": "specific",
+  "query": "letta sleep-time agent",
+  "expected": "Projects/second-brain-mcp/business/competitor analysis/letta/Letta - Technical Breakdown.md"
+ },
+ {
+  "category": "specific",
+  "query": "zep pricing and funding",
+  "expected": "Projects/second-brain-mcp/business/competitor analysis/zep/Zep - Business Overview.md"
+ },
+ {
+  "category": "specific",
+  "query": "why did the reactor pump trip",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/10-16August/01 - 10 August 2026 - Solar Reactor Test 45.md"
+ },
+ {
+  "category": "date",
+  "query": "what did I work on 21 October",
+  "expected": "Areas/Lab-Internship/engineering-logs/October 2026/19-23October/02 - 21 October 2026 - Ray-Tracing Book and Experimental Plan.md"
+ },
+ {
+  "category": "date",
+  "query": "what happened on 10 August",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/10-16August/01 - 10 August 2026 - Solar Reactor Test 45.md"
+ },
+ {
+  "category": "date",
+  "query": "the incident on 20 October",
+  "expected": "Areas/Lab-Internship/engineering-logs/October 2026/19-23October/01 - 20 October 2026 - Incident - Duplicate Records After Sync.md"
+ },
+ {
+  "category": "date",
+  "query": "lab work on 6 August",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/3-9August/02 - 6 August 2026 - Thesis Reading - Catalyst Degradation.md"
+ },
+ {
+  "category": "broad",
+  "query": "what did I do in August at the lab",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/00 - August 2026 Index.md"
+ },
+ {
+  "category": "broad",
+  "query": "overview of the week of 19-23 October",
+  "expected": "Areas/Lab-Internship/engineering-logs/October 2026/19-23October/00 - Index.md"
+ },
+ {
+  "category": "broad",
+  "query": "summary of the agent memory competitor landscape",
+  "expected": [
+   "Projects/second-brain-mcp/business/competitor analysis/Agent Memory Landscape - Synthesis.md",
+   "Projects/second-brain-mcp/business/competitor analysis/Competitor Analysis - Map.md"
+  ]
+ },
+ {
+  "category": "broad",
+  "query": "all the photocurrent experiments",
+  "expected": [
+   "Areas/Lab-Internship/engineering-logs/August 2026/00 - August 2026 Index.md",
+   "Areas/Lab-Internship/engineering-logs/August 2026/10-16August/00 - Index.md"
+  ]
+ },
+ {
+  "category": "broad",
+  "query": "everything about the second brain project",
+  "expected": "Projects/second-brain-mcp/second-brain-mcp.md"
+ },
+ {
+  "category": "broad",
+  "query": "what experiments ran in the week of 10-16 August",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/10-16August/00 - Index.md"
+ },
+ {
+  "category": "paraphrase",
+  "query": "tree of summaries for answering broad questions over long documents",
+  "expected": "Projects/second-brain-mcp/Research/papers/RAPTOR — Recursive Tree-Organized Retrieval.md"
+ },
+ {
+  "category": "paraphrase",
+  "query": "model decides whether it should search at all",
+  "expected": "Projects/second-brain-mcp/Research/papers/Self-RAG — Learn to Retrieve and Critique.md"
+ },
+ {
+  "category": "paraphrase",
+  "query": "context window treated like RAM with paging",
+  "expected": "Projects/second-brain-mcp/Research/papers/MemGPT — LLMs as Operating Systems.md"
+ },
+ {
+  "category": "paraphrase",
+  "query": "electrode coating dissolves after long illumination",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/3-9August/02 - 6 August 2026 - Thesis Reading - Catalyst Degradation.md"
+ },
+ {
+  "category": "paraphrase",
+  "query": "records showed up twice after syncing",
+  "expected": "Areas/Lab-Internship/engineering-logs/October 2026/19-23October/01 - 20 October 2026 - Incident - Duplicate Records After Sync.md"
+ },
+ {
+  "category": "broad",
+  "query": "overview of everything I know about agent memory competitors",
+  "expected": [
+   "Projects/second-brain-mcp/business/competitor analysis/Agent Memory Landscape - Synthesis.md",
+   "Projects/second-brain-mcp/business/competitor analysis/Competitor Analysis - Map.md"
+  ]
+ },
+ {
+  "category": "specific",
+  "query": "solar reactor test 45",
+  "expected": "Areas/Lab-Internship/engineering-logs/August 2026/10-16August/01 - 10 August 2026 - Solar Reactor Test 45.md"
+ }
+]

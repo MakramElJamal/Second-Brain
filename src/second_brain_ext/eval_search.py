@@ -87,6 +87,7 @@ def run_eval(vault_path: Path, eval_set: list[dict] | None = None,
         ranked_ids = [h.note.id for h in hits]
         rank = _rank_of(ranked_ids, case["expected"])
         per_query.append({
+            "category": case.get("category", "all"),
             "query": case["query"],
             "expected": case["expected"],
             "rank": rank,
@@ -99,9 +100,18 @@ def run_eval(vault_path: Path, eval_set: list[dict] | None = None,
         f"recall@{k}": round(sum(1 for r in per_query if r["rank"] and r["rank"] <= k) / n, 3)
         for k in k_values
     }
+    by_category: dict[str, dict] = {}
+    for cat in sorted({r["category"] for r in per_query}):
+        rows = [r for r in per_query if r["category"] == cat]
+        by_category[cat] = {
+            "questions": len(rows),
+            "recall@1": round(sum(1 for r in rows if r["rank"] == 1) / len(rows), 3),
+            "mrr": round(statistics.mean(r["reciprocal"] for r in rows), 3),
+        }
     return {
         "meta": {"vault": str(vault_path), "questions": n},
         "recall": recall,
+        "by_category": by_category,
         "mrr": round(statistics.mean(r["reciprocal"] for r in per_query), 3),
         "misses": [r["query"] for r in per_query if r["rank"] is None],
         "per_query": per_query,
@@ -129,6 +139,12 @@ def format_report(report: dict) -> str:
     for k, v in report["recall"].items():
         w(f"  {k:<10} {v:>6.0%}")
     w(f"  {'MRR':<10} {report['mrr']:>6.3f}")
+    if len(report.get("by_category", {})) > 1:
+        w("")
+        w("By category (recall@1 / MRR)")
+        w("-" * 64)
+        for cat, c in report["by_category"].items():
+            w(f"  {cat:<12} n={c['questions']:<3} {c['recall@1']:>6.0%}  {c['mrr']:.3f}")
     if report["misses"]:
         w("")
         w(f"  Misses ({len(report['misses'])}): not in top results —")

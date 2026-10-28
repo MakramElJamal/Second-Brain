@@ -235,6 +235,7 @@ a public issue.
 .\.venv\Scripts\python.exe -m pytest tests\ -q             # test suite
 .\.venv\Scripts\python.exe -m second_brain_ext.benchmark   # token cost per answer
 .\.venv\Scripts\python.exe -m second_brain_ext.eval_search # search accuracy (recall@k, MRR)
+.\.venv\Scripts\python.exe -m second_brain_ext.eval_search --vault tests\tree_vault --eval tests\tree_eval.json # tree-shaped vault, by question type
 ```
 
 Our layer lives in `src/second_brain_ext/` (token-light retrieval + the write

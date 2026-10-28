@@ -174,9 +174,13 @@ Chat Archive/
 - **Raw transcripts are excluded from the index**, so chat memory is retrieved
   via tiny distilled notes.
 - **Edits send only the changed slice.**
-- Ranking is keyword-based and **coverage-dominated with stopword filtering**, so
-  short, on-topic notes beat long notes that merely repeat common words. (A token
-  benchmark to quantify all of this is the next item — see Roadmap.)
+- Ranking is keyword-based **BM25F** (IDF-weighted, title > tags > folder path >
+  summary > body, saturating and length-normalized), so short, on-topic notes beat
+  long notes that merely repeat common words. It is **knowledge-tree aware**: the
+  folder path is a searchable field, and index / map / synthesis notes are treated
+  as summary nodes of their subtree, promoted for broad questions ("what did I do
+  in August") while specific questions still land on the leaf. See
+  [`docs/retrieval-and-knowledge-trees.md`](docs/retrieval-and-knowledge-trees.md).
 
 ---
 
@@ -228,7 +232,7 @@ second-brain-web-mcp/
     second_brain_ext/        # OUR layer
       extension.py           # tools, tool-curation, in-memory index, lifecycle
       note.py                # parse vault markdown -> Note objects
-      ranking.py             # keyword + metadata ranking (coverage, stopwords)
+      ranking.py             # BM25F + folder-path field + knowledge-tree hub promotion
       tags.py                # approved-tag vocabulary + governance + bootstrap
       templates.py           # PARA bucket routing + per-type templates
       writing.py             # render, house-style, create/append/section/frontmatter
